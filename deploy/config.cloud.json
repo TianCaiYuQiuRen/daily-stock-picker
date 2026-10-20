@@ -1,0 +1,12 @@
+{
+  "data_source": "online",
+  "schedule": {
+    "enabled": true,
+    "time": "15:05",
+    "auto_write": false
+  },
+  "share": {
+    "auto": false,
+    "allow_remote_scan": true
+  }
+}

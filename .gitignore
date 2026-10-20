@@ -1,0 +1,18 @@
+# ===== Python =====
+__pycache__/
+*.py[cod]
+*.egg-info/
+.venv/
+venv/
+
+# ===== 本地运行数据 / 缓存（体积大、每台机器不同，不入库）=====
+data/*
+!data/config.json
+*.log
+*.testbak
+
+# ===== 大体积二进制：cloudflared 请自行下载 =====
+bin/*.exe
+
+# ===== 打包产物 =====
+*.zip

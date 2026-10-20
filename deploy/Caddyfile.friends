@@ -1,0 +1,21 @@
+# 只给几个人用：开启密码访问
+#
+# 1. 生成密码哈希（把 你的密码 换成实际密码）：
+#    docker run --rm caddy:2 caddy hash-password --plaintext '你的密码'
+# 2. 把输出的哈希替换下面 $2a$14$... 这一串
+# 3. 用户名可以改成家人的名字，多人就在 basic_auth 里加多行
+# 4. 把 stock.example.com 换成你的域名
+stock.example.com {
+	encode gzip zstd
+
+	basic_auth {
+		family $2a$14$REPLACE_WITH_YOUR_HASH
+	}
+
+	reverse_proxy picker:8765
+
+	header {
+		X-Content-Type-Options nosniff
+		Referrer-Policy no-referrer
+	}
+}

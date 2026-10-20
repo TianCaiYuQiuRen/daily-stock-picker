@@ -1,0 +1,11 @@
+# 把 stock.example.com 换成你自己的域名，并把域名 A 记录指向服务器公网 IP。
+# Caddy 会自动申请和续期 HTTPS 证书，无需手动配证书。
+stock.example.com {
+	encode gzip zstd
+	reverse_proxy picker:8765
+
+	header {
+		X-Content-Type-Options nosniff
+		Referrer-Policy no-referrer
+	}
+}

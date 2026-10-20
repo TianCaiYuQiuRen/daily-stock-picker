@@ -1,0 +1,32 @@
+{
+  "tdx_root": "F:\\TDX",
+  "data_source": "auto",
+  "strategy_params": {
+    "zhuanxing": {
+      "max_distance": 5,
+      "body_ratio": 0.6667
+    }
+  },
+  "block_prefix": "智选",
+  "strategy_key": "zhuanxing",
+  "top_n": 0,
+  "port": 8765,
+  "bind": "0.0.0.0",
+  "filters": {
+    "boards": [
+      "main"
+    ],
+    "exclude_st": true,
+    "min_price": 2,
+    "max_price": 500
+  },
+  "schedule": {
+    "enabled": true,
+    "time": "14:45",
+    "auto_write": true
+  },
+  "share": {
+    "auto": false,
+    "allow_remote_scan": true
+  }
+}

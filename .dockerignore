@@ -1,0 +1,9 @@
+data/
+bin/
+python/
+docs/
+*.zip
+*.log
+__pycache__/
+*.pyc
+.git/

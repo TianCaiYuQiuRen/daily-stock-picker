@@ -1,0 +1,34 @@
+services:
+  picker:
+    build: .
+    restart: unless-stopped
+    environment:
+      - TZ=Asia/Shanghai
+      - PORT=8765
+    volumes:
+      - ./data:/app/data
+    # 只绑定本机回环，供站长自己 curl 管理；公网只经 Caddy 进来
+    ports:
+      - "127.0.0.1:8765:8765"
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request;urllib.request.urlopen('http://127.0.0.1:8765/api/health',timeout=3)"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+
+  caddy:
+    image: caddy:2
+    restart: unless-stopped
+    depends_on:
+      - picker
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy_data:/data
+      - caddy_config:/config
+
+volumes:
+  caddy_data:
+  caddy_config:

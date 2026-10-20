@@ -1,0 +1,311 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>每日选股 · 智选</title>
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Crect width='64' height='64' rx='16' fill='%232f6bff'/%3E%3Cpath d='M16 40l9-10 8 7 14-17' stroke='white' stroke-width='6' fill='none' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E">
+<link rel="stylesheet" href="/style.css">
+</head>
+<body>
+<div class="app">
+
+  <header class="topbar">
+    <div class="brand">
+      <div class="logo">选</div>
+      <div class="brand-text">
+        <div class="brand-name">每日选股</div>
+        <div class="brand-sub">智选 · 通达信板块联动</div>
+      </div>
+    </div>
+    <div class="quote-line" id="quoteLine">
+      <span class="quote-mark">“</span><span id="quoteText">截断亏损，让利润奔跑。</span>
+    </div>
+    <div class="top-right">
+      <span class="pill guest-pill" id="guestPill" hidden>访客浏览</span>
+      <div class="pill" id="marketPill"><span class="dot" id="marketDot"></span><span id="marketText">加载中</span></div>
+      <div class="pill muted-pill">行情 <b id="quoteTime">--</b></div>
+      <button class="icon-btn" id="btnShare" hidden>分享</button>
+      <button class="icon-btn" id="btnSettings" hidden>⚙ 设置</button>
+    </div>
+  </header>
+
+  <main>
+    <section class="hero card">
+      <div class="hero-main">
+        <div class="eyebrow">今日策略</div>
+        <div class="hero-title">
+          <h1 id="strategyName">砖形图战法</h1>
+          <span class="demo-tag">自定指标</span>
+        </div>
+        <p class="hero-desc" id="strategyDesc">正在加载策略…</p>
+        <div class="chips" id="paramChips"></div>
+      </div>
+      <div class="stats">
+        <div class="stat"><div class="stat-num" id="statUniverse">--</div><div class="stat-label">扫描股票</div></div>
+        <div class="stat hot"><div class="stat-num" id="statMatched">--</div><div class="stat-label">今日入选</div></div>
+        <div class="stat"><div class="stat-num" id="statTime">--</div><div class="stat-label">运行用时</div></div>
+      </div>
+    </section>
+
+    <section class="strategy-bar">
+      <span class="board-label">战法</span>
+      <div class="strategy-chips" id="strategyChips"></div>
+      <span class="board-hint" id="strategyHint"></span>
+    </section>
+
+    <section class="board-bar">
+      <span class="board-label">选股范围</span>
+      <div class="board-chips" id="boardChips"></div>
+      <span class="board-hint" id="boardHint"></span>
+    </section>
+
+    <section class="actions">
+      <button id="btnScan" class="btn primary">开始选股</button>
+      <button id="btnWrite" class="btn dark" disabled>写入通达信板块</button>
+      <button id="btnExport" class="btn ghost" disabled>导出 CSV</button>
+      <button id="btnHistory" class="btn ghost">历史</button>
+      <button id="btnSellScore" class="btn ghost">卖出评分</button>
+      <button id="btnCheckin" class="btn ghost">打卡</button>
+      <div class="spacer"></div>
+      <div class="meta" id="metaText">尚未选股</div>
+    </section>
+
+    <section class="content">
+      <div class="card table-card">
+        <div class="progress" id="progress" hidden>
+          <div class="progress-bar"><i id="progressFill"></i></div>
+          <div class="progress-text"><span id="progressText">正在准备…</span><span id="progressPct"></span></div>
+        </div>
+        <div class="table-wrap">
+          <table id="resultTable">
+            <thead>
+              <tr>
+                <th class="w-rank sortable" data-sort="score" title="综合评分，点击排序">#<span class="arrow"></span></th>
+                <th class="sortable" data-sort="code">代码<span class="arrow"></span></th>
+                <th class="sortable" data-sort="name">名称<span class="arrow"></span></th>
+                <th class="num sortable" data-sort="price">现价<span class="arrow"></span></th>
+                <th class="num sortable" data-sort="pct">涨幅<span class="arrow"></span></th>
+                <th class="num sortable" data-sort="vol_ratio">量比<span class="arrow"></span></th>
+                <th class="num sortable" data-sort="turnover">换手<span class="arrow"></span></th>
+                <th class="num sortable" data-sort="amount">成交额<span class="arrow"></span></th>
+                <th class="num sortable" data-sort="float_cap">流通市值<span class="arrow"></span></th>
+                <th class="signals">信号</th>
+              </tr>
+            </thead>
+            <tbody id="resultBody"></tbody>
+          </table>
+        </div>
+        <div class="empty" id="empty">
+          <div class="empty-icon">📈</div>
+          <div class="empty-title">还没有选股结果</div>
+          <div class="empty-sub">点击「开始选股」，从全市场实时行情中筛选</div>
+        </div>
+      </div>
+
+      <aside class="side">
+        <div class="card block-card">
+          <div class="card-head"><span>通达信板块</span><span class="tag" id="tdxTag">检测中</span></div>
+          <div class="block-name" id="blockName">--</div>
+          <div class="block-desc" id="blockDesc">选股后自动生成板块名</div>
+          <button class="btn dark wide" id="btnWriteSide" disabled>写入板块</button>
+          <div class="hint" id="writeHint">通达信只在启动时读取板块，写入后需重启客户端（程序会提示）</div>
+        </div>
+        <div class="card info-card">
+          <div class="card-head"><span>说明</span></div>
+          <ul class="notes">
+            <li>行情来自腾讯实时接口，结果每 <b>5 秒</b> 刷新最新价。</li>
+            <li>历史 K 线读取通达信本地日线，扫描更快。</li>
+            <li>少妇战法需要 <b>14:45</b> 涨跌幅，程序需在盘中保持运行。</li>
+            <li>每天 <b id="schedTime">15:05</b> 自动选股并写入板块。</li>
+            <li>可点右上角「分享」把页面发给朋友（只读）。</li>
+          </ul>
+        </div>
+      </aside>
+    </section>
+  </main>
+</div>
+
+<div class="overlay" id="overlay" hidden></div>
+
+<aside class="drawer" id="drawer" hidden>
+  <div class="drawer-head">
+    <h2>设置</h2>
+    <button class="close-btn" id="btnCloseDrawer">×</button>
+  </div>
+  <form id="settingsForm" class="drawer-body">
+    <div class="field">
+      <label for="cfgTdxRoot">通达信安装目录</label>
+      <input id="cfgTdxRoot" type="text" placeholder="例如 F:\TDX">
+      <div class="field-hint">目录下应包含 T0002 文件夹；留空将自动检测。</div>
+    </div>
+    <div class="field">
+      <label for="cfgPrefix">板块名前缀</label>
+      <input id="cfgPrefix" type="text" maxlength="4" placeholder="智选">
+      <div class="field-hint">最终板块名 = 前缀·策略短名，例如「智选·量价突破」。</div>
+    </div>
+    <div class="field">
+      <label for="cfgTopN">每期最多入选</label>
+      <input id="cfgTopN" type="number" min="0" max="5000" step="1">
+      <div class="field-hint">填 0 表示不限制，全部符合条件的股票都入选。</div>
+    </div>
+
+    <div class="section-title">自动任务</div>
+    <label class="switch-row">
+      <input type="checkbox" id="cfgSchedEnabled">
+      <span>每天自动选股（周一至周五）</span>
+    </label>
+    <div class="field inline">
+      <label for="cfgSchedTime">执行时间</label>
+      <input id="cfgSchedTime" type="time" step="60">
+    </div>
+    <label class="switch-row">
+      <input type="checkbox" id="cfgAutoWrite">
+      <span>选股完成后自动写入通达信板块</span>
+    </label>
+    <div class="field-hint warn">自动写入不会关闭通达信；重启客户端后即可在「板块」中看到当日结果。</div>
+
+    <div class="section-title">分享</div>
+    <label class="switch-row">
+      <input type="checkbox" id="cfgAllowRemoteScan">
+      <span>允许访客自己点「开始选股」</span>
+    </label>
+    <div class="field-hint">关闭后，访客只能查看你最新一次的结果；写入板块始终只限本机。</div>
+
+    <div class="section-title">战法参数（当前战法）</div>
+    <div id="paramFields"></div>
+    <div class="field-hint">修改后点「保存设置」生效，下一次选股按新参数执行。</div>
+
+    <div class="section-title">过滤条件</div>
+    <label class="switch-row"><input type="checkbox" id="cfgExSt"><span>排除 ST / 退市股</span></label>
+    <div class="field-row">
+      <div class="field"><label for="cfgMinPrice">最低价（元）</label><input id="cfgMinPrice" type="number" min="0" step="0.1"></div>
+      <div class="field"><label for="cfgMaxPrice">最高价（元）</label><input id="cfgMaxPrice" type="number" min="0" step="0.1"></div>
+    </div>
+
+    <div class="drawer-actions">
+      <button type="button" class="btn ghost" id="btnCancelSettings">取消</button>
+      <button type="submit" class="btn primary">保存设置</button>
+    </div>
+  </form>
+</aside>
+
+<div class="modal-wrap" id="modal" hidden>
+  <div class="modal">
+    <h3 id="modalTitle">提示</h3>
+    <p id="modalText"></p>
+    <div class="modal-actions">
+      <button class="btn ghost" id="modalCancel">取消</button>
+      <button class="btn primary" id="modalOk">确定</button>
+    </div>
+  </div>
+</div>
+
+<div class="modal-wrap" id="shareModal" hidden>
+  <div class="modal">
+    <h3>分享给朋友</h3>
+    <p id="shareText">正在生成公网链接，请稍候…</p>
+    <div class="share-row" id="shareRow" hidden>
+      <input id="shareUrl" readonly>
+      <button class="btn primary" id="btnCopyShare">复制</button>
+    </div>
+    <p class="share-tip">朋友打开链接即可查看选股结果（只读，不能写入你的通达信）。链接在程序重启后会变化。</p>
+    <div class="modal-actions">
+      <button class="btn ghost" id="btnStopShare" hidden>停止分享</button>
+      <button class="btn ghost" id="btnCloseShare">关闭</button>
+    </div>
+  </div>
+</div>
+
+<div class="modal-wrap" id="chartModal" hidden>
+  <div class="chart-modal">
+    <div class="chart-head">
+      <div><b id="chartName">--</b> <span id="chartMeta" class="chart-meta"></span></div>
+      <button class="close-btn" id="btnCloseChart">×</button>
+    </div>
+    <div id="chartBox"></div>
+    <div class="chart-legend" id="chartLegend">K线 · 白线 · 黄线 · 成交量 · 战法指标</div>
+  </div>
+</div>
+
+<div class="modal-wrap" id="historyModal" hidden>
+  <div class="history-modal">
+    <div class="chart-head">
+      <div><b>历史选股</b> <span id="historyMeta" class="chart-meta"></span></div>
+      <button class="close-btn" id="btnCloseHistory">×</button>
+    </div>
+    <div id="historyBody" class="history-body"></div>
+  </div>
+</div>
+
+<div class="modal-wrap" id="sellModal" hidden>
+  <div class="sell-modal">
+    <div class="chart-head">
+      <div><b id="sellName">卖出评分</b> <span id="sellMeta" class="chart-meta"></span></div>
+      <button class="close-btn" id="btnCloseSell">×</button>
+    </div>
+    <div class="sell-input-row">
+      <input id="sellCode" placeholder="输入股票代码，如 600519" maxlength="6">
+      <button class="btn primary" id="btnSellRun">评分</button>
+    </div>
+    <div id="sellResult" class="sell-result" hidden>
+      <div class="sell-score-box">
+        <div class="sell-score" id="sellScore">--</div>
+        <div class="sell-verdict" id="sellVerdict">--</div>
+      </div>
+      <div class="sell-overview">
+        <div class="sell-band">
+          <div class="sell-band-track">
+            <span class="seg ok">持有</span><span class="seg watch">观察</span><span class="seg warn">减仓</span><span class="seg danger">卖出</span>
+            <i id="sellBandMark"></i>
+          </div>
+        </div>
+        <div class="sell-cats" id="sellCats"></div>
+      </div>
+    </div>
+    <div id="sellChart" class="sell-chart"></div>
+    <div class="chart-legend" id="sellLegend">红 S = 最近 30 个交易日按同一规则触发的卖点（只用当天及以前的数据，无马后炮）</div>
+  </div>
+</div>
+
+<div class="modal-wrap" id="checkinModal" hidden>
+  <div class="checkin-modal">
+    <div class="chart-head">
+      <div><b>交易打卡</b> <span id="checkinMeta" class="chart-meta"></span></div>
+      <button class="close-btn" id="btnCloseCheckin">×</button>
+    </div>
+    <div class="checkin-summary" id="checkinSummary"></div>
+    <div class="checkin-body">
+      <div class="cal-box">
+        <div class="cal-head">
+          <button class="cal-nav" id="calPrev">‹</button>
+          <b id="calTitle">--</b>
+          <button class="cal-nav" id="calNext">›</button>
+        </div>
+        <div class="cal-week"><span>一</span><span>二</span><span>三</span><span>四</span><span>五</span><span>六</span><span>日</span></div>
+        <div class="cal-grid" id="calGrid"></div>
+        <div class="cal-legend"><i class="up"></i>盈利 <i class="down"></i>亏损 <i class="dot"></i>已打卡</div>
+      </div>
+      <div class="cal-editor">
+        <div class="cal-date" id="calDate">选择日期</div>
+        <div class="field">
+          <label for="calPnl">当日盈亏（元）</label>
+          <input id="calPnl" type="number" step="0.01" placeholder="盈利填正数，亏损填负数">
+        </div>
+        <div class="cal-actions">
+          <button class="btn primary" id="btnSavePnl">保存</button>
+          <button class="btn ghost" id="btnTodayCheckin">今日打卡</button>
+          <button class="btn ghost" id="btnDelPnl">删除</button>
+        </div>
+        <div class="field-hint">打卡和盈亏只保存在本机浏览器，不上传服务器。</div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="toast" id="toast" hidden></div>
+
+<script src="/echarts.min.js"></script>
+<script src="/app.js"></script>
+</body>
+</html>
