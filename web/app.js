@@ -591,31 +591,42 @@
       showModal("无法写入", "还没有选股结果，请先选股。");
       return;
     }
+
+    // 写入前刷新一次，避免拿到过期的「通达信是否运行」状态
+    try {
+      const st = await api("/api/state");
+      if (st && st.tdx) state.tdx = st.tdx;
+    } catch (e) { /* 忽略，交给服务端校验 */ }
+
+    const wasRunning = !!(state.tdx && state.tdx.running);
+    if (wasRunning) {
+      const yes = await showModal(
+        "写入前需要关闭通达信",
+        "写入会先清空「" + ((r.strategy && r.strategy.block_name) || "该板块") +
+        "」里的原有股票，再写入今天选出的 " + r.items.length + " 只。\n\n" +
+        "通达信正在运行，必须先关闭，否则客户端会用内存里的旧名单覆盖文件。\n关闭并写入，完成后自动重启通达信？",
+        "关闭并写入", true
+      );
+      if (!yes) { toast("已取消，未写入"); return; }
+    }
+
     const btns = [$("btnWrite"), $("btnWriteSide")];
     btns.forEach((b) => { b.disabled = true; });
     $("btnWriteSide").textContent = "写入中…";
 
     try {
-      const res = await api("/api/write", { method: "POST", body: {} });
+      const res = await api("/api/write", { method: "POST", body: { restart: wasRunning } });
       if (!res.ok) throw new Error(res.error || "写入失败");
       state.result.written = { name: res.name, count: res.count, at: res.at };
       renderBlock();
-      toast("已写入板块「" + res.name + "」共 " + res.count + " 只");
+      toast("已清空原 " + (res.removed || 0) + " 只，写入 " + res.count + " 只");
 
       if (res.tdx_running) {
-        const yes = await showModal(
-          "需要重启通达信",
-          "板块已经写入，但通达信正在运行，客户端不会自动加载新板块。\n\n现在重启通达信吗？重启后需要重新登录一次。",
-          "立即重启", true
-        );
-        if (yes) {
-          const r2 = await api("/api/write", { method: "POST", body: { restart: true } });
-          toast(r2.restarted ? "通达信已重启，登录后在「自定」中查看" : "已写入，通达信未启动");
-        } else {
-          toast("已写入，稍后重启通达信即可看到");
-        }
-      } else {
-        toast("已写入，打开通达信即可在「自定」中看到");
+        showModal("还需要重启通达信",
+          "文件已经写入，但通达信仍在运行，客户端不会加载新名单。\n请关闭通达信后重新打开，再查看「" + res.name + "」。",
+          "知道了", false);
+      } else if (wasRunning && res.restarted) {
+        toast("通达信已重启，登录后查看「" + res.name + "」");
       }
     } catch (e) {
       showModal("写入失败", e.message);

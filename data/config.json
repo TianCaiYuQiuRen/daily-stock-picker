@@ -8,7 +8,7 @@
     }
   },
   "block_prefix": "智选",
-  "strategy_key": "zhuanxing",
+  "strategy_key": "shaofu",
   "top_n": 0,
   "port": 8765,
   "bind": "0.0.0.0",

@@ -328,6 +328,14 @@ def _write_block(auto=False, restart=False):
         root = config.get()["tdx_root"]
 
     was_running = tdx_block.is_tdx_running()
+    if was_running and auto:
+        with STATE.lock:
+            STATE.write = {"ok": False,
+                           "message": "通达信正在运行，已跳过自动写入；请手动点「写入板块」（会先清空再写）"}
+        return {"ok": False, "skipped": True, "reason": "tdx_running",
+                "name": name, "removed": 0, "count": 0}
+    if was_running and not auto and not restart:
+        raise ValueError("通达信正在运行，请先关闭通达信再写入（程序会提示自动关闭）")
     if restart and was_running:
         if not tdx_block.close_tdx():
             raise ValueError("无法关闭通达信，请手动关闭后重试")
@@ -343,7 +351,9 @@ def _write_block(auto=False, restart=False):
         info["restarted"] = tdx_block.start_tdx(root)
 
     with STATE.lock:
-        STATE.write = {"ok": True, "message": "已写入「%s」（%d 只）" % (name, info["count"]),
+        STATE.write = {"ok": True,
+                       "message": "已清空「%s」原有 %d 只，写入 %d 只"
+                                  % (name, info.get("removed", 0), info["count"]),
                        "at": info["at"]}
         if STATE.result is not None:
             STATE.result["written"] = {"name": name, "count": info["count"],

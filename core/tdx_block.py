@@ -109,6 +109,19 @@ def list_blocks(root):
     return out
 
 
+def _backup_blk(root, fname):
+    """备份即将被清空的 .blk，便于误操作后恢复。"""
+    src = os.path.join(blocknew_dir(root), fname + ".blk")
+    if not os.path.isfile(src):
+        return ""
+    ts = time.strftime("%Y%m%d_%H%M%S")
+    dst_dir = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "data", "backups")
+    os.makedirs(dst_dir, exist_ok=True)
+    dst = os.path.join(dst_dir, "block_%s_%s.blk" % (fname, ts))
+    shutil.copy2(src, dst)
+    return dst
+
+
 def _backup(root):
     ts = time.strftime("%Y%m%d_%H%M%S")
     src = cfg_path(root)
@@ -163,7 +176,11 @@ def write_block(root, name, pairs):
     else:
         fname = _new_file_name(root, entries)
 
-    # 写 .blk
+    # 先记录旧数量并备份，再整文件覆盖（等于清空后重写）
+    old_count = _blk_count(root, fname) if target else 0
+    backup_blk = _backup_blk(root, fname) if target else ""
+
+    # 写 .blk（tmp + replace，旧内容整体丢弃）
     lines = []
     seen = set()
     for market, code in pairs:
@@ -204,8 +221,11 @@ def write_block(root, name, pairs):
         "name": name,
         "file": fname,
         "count": len(lines),
+        "removed": old_count,
+        "previous": old_count,
         "created": created,
         "backup": backup,
+        "backup_blk": backup_blk,
     }
 
 
