@@ -44,15 +44,16 @@ class ZhuanXing(Strategy):
     key = "zhuanxing"
     name = "砖形图战法"
     short = "砖形图"
-    description = ("股价在黄线上，且距离白线或黄线小于 5%；砖型图出现红砖，"
-                   "红砖实体 ≥ 两根以内最近一根绿砖的 2/3。每天只保留当日选出的股票。")
+    description = ("股价在黄线上，且距离白线或黄线小于 5%；砖型图由绿转红"
+                   "（红砖前两根内至少有一根绿砖），红砖实体 ≥ 最近一根绿砖的 2/3。"
+                   "每天只保留当日选出的股票。")
     params = {
         "max_distance": 5.0,
         "body_ratio": 2.0 / 3.0,
     }
 
     def param_chips(self):
-        return ["股价在黄线上", "距白/黄线 <5%", "红砖实体 ≥ 2 根内绿砖 2/3"]
+        return ["股价在黄线上", "距白/黄线 <5%", "红砖前 2 根内有绿砖", "红砖 ≥ 绿砖 2/3"]
 
     def match(self, f):
         p = self.params

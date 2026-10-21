@@ -148,14 +148,14 @@ def build_features(bars, quote, market_date=None, pct_1445=None, use_close=False
     brick_turn_red = brick_now > brick_prev and brick_prev > brick_prev2
     brick_red = brick_now > brick_prev
     brick_red_body = brick_now - brick_prev
-    # 两根以内最近的一根绿砖
+    # 两根以内最近的一根绿砖（砖值下降 = 绿砖）
     brick_green_body = 0.0
     brick_green_offset = 0
-    if brick_prev > brick_prev2:
-        brick_green_body = brick_prev - brick_prev2
+    if brick_prev < brick_prev2:
+        brick_green_body = brick_prev2 - brick_prev
         brick_green_offset = 1
-    elif brick_prev2 > brick_prev3:
-        brick_green_body = brick_prev2 - brick_prev3
+    elif brick_prev2 < brick_prev3:
+        brick_green_body = brick_prev3 - brick_prev2
         brick_green_offset = 2
     brick_ok = bool(brick_red and brick_green_body > 0 and
                     brick_red_body >= brick_green_body * 2.0 / 3.0)
