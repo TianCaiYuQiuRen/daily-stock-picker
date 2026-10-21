@@ -1,0 +1,572 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>K线训练营 · 200根真实K线回放</title>
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Crect width='64' height='64' rx='16' fill='%23111b31'/%3E%3Cpath d='M18 44V20M32 48V15M46 40V24' stroke='%23ff5a65' stroke-width='5' stroke-linecap='round'/%3E%3Cpath d='M12 32h12M26 30h12M40 34h12' stroke='%232ee6a7' stroke-width='3'/%3E%3C/svg%3E">
+<link rel="stylesheet" href="/training.css">
+</head>
+<body>
+<div class="tr-app" id="trApp">
+  <header class="tr-top">
+    <a class="tr-brand" href="/training">
+      <span class="tr-logo"><i></i><i></i><i></i></span>
+      <span class="tr-brand-text">
+        <strong>K线训练营</strong>
+        <small>真实历史 · 双盲回放 · 形态识别</small>
+      </span>
+    </a>
+    <nav class="tr-nav" id="mainNav" aria-label="主导航">
+      <button class="active" data-view="train">训练场</button>
+      <button data-view="stats">数据统计</button>
+      <button data-view="pattern">形态分析</button>
+    </nav>
+    <div class="tr-topright">
+      <span class="tr-data-pill"><i class="live-dot"></i><span id="dataPillText">历史数据就绪</span></span>
+      <a class="tr-ghost-btn" href="/">← 每日选股</a>
+    </div>
+  </header>
+
+  <!-- ======================= 训练场 ======================= -->
+  <main class="tr-view" id="view-train">
+    <section class="tr-hero">
+      <div class="tr-hero-copy">
+        <div class="tr-eyebrow">K-LINE TRAINING</div>
+        <h1>用 200 根真实K线，<em>练出盘感。</em></h1>
+        <p>从真实历史行情中随机截取片段，隐藏名称与日期。逐根回放、模拟买卖，走完再看答案。</p>
+      </div>
+      <div class="tr-hero-stats">
+        <div class="hero-stat"><b id="heroToday">0</b><span>今日训练</span></div>
+        <div class="hero-stat"><b id="heroSessions">0</b><span>累计局数</span></div>
+        <div class="hero-stat accent"><b id="heroWinRate">--</b><span>交易胜率</span></div>
+      </div>
+    </section>
+
+    <div class="train-grid">
+      <section class="chart-card" id="chartCard">
+        <div class="chart-top">
+          <div class="chart-heading">
+            <div class="chart-badges">
+              <span class="period-badge" id="trainPeriodBadge">日线</span>
+              <span class="blind-badge"><i></i>双盲模式</span>
+              <span class="chart-state" id="trainState">进行中</span>
+            </div>
+            <div class="chart-sub" id="trainCounter">第 60 / 200 根</div>
+          </div>
+          <div class="chart-tools">
+            <button class="mini-btn" id="btnIndicator" type="button">
+              <span class="ind-icon">◫</span> 指标
+            </button>
+            <button class="mini-btn" id="btnPatternHint" type="button">
+              <span class="spark-icon">✦</span> 形态提示
+            </button>
+            <button class="mini-btn" id="btnReveal" type="button">揭晓答案</button>
+          </div>
+        </div>
+
+        <div class="chart-shell">
+          <div id="trainChart" class="train-chart" aria-label="K线训练图"></div>
+          <div class="chart-loading" id="chartLoading">
+            <span class="spinner"></span>
+            <b>正在截取历史K线…</b>
+            <small>从真实行情中随机抽样，请稍候</small>
+          </div>
+          <div class="chart-error" id="chartError" hidden>
+            <b>没有加载出来</b>
+            <p id="chartErrorText"></p>
+            <button class="btn-fill" id="btnRetry" type="button">重新加载</button>
+          </div>
+
+          <div class="result-overlay" id="trainResult" hidden>
+            <div class="result-card">
+              <div class="result-kicker" id="resKicker">本局结束</div>
+              <h2 id="resTitle">训练完成</h2>
+              <div class="result-stock" id="resStock">贵州茅台 <code>600519</code> · 日线</div>
+              <div class="result-dates" id="resDates">2024-01-02 → 2024-10-18</div>
+              <div class="result-grade" id="resGrade">A</div>
+              <div class="result-metrics" id="resMetrics"></div>
+              <div class="result-actions">
+                <button class="btn-fill" id="btnAgain" type="button">再来一局</button>
+                <button class="btn-line" id="btnCloseResult" type="button">回看K线</button>
+              </div>
+              <p class="result-tip">答案只在本局结束后显示；每次新题都会重新随机抽取。</p>
+            </div>
+          </div>
+        </div>
+
+        <div class="indicator-strip" id="indicatorStrip" hidden></div>
+
+        <div class="chart-footer">
+          <div class="progress-block">
+            <div class="progress-meta"><span>回放进度</span><b id="progressText">60 / 200</b></div>
+            <div class="progress-track"><i id="progressFill"></i></div>
+            <div class="progress-ticks" id="progressTicks"></div>
+          </div>
+          <div class="play-block">
+            <button class="btn-step" id="btnStep" type="button"><span>下一根</span><kbd>Space</kbd></button>
+            <button class="btn-auto" id="btnAuto" type="button"><span class="play-dot"></span><span id="autoLabel">自动播放</span></button>
+            <div class="speed-group" id="speedGroup">
+              <button data-speed="420" class="active">1×</button>
+              <button data-speed="220">2×</button>
+              <button data-speed="90">4×</button>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <aside class="side-col">
+        <section class="panel-card setup-card">
+          <div class="panel-title"><span>本局设置</span><span class="tiny-tag">BLIND</span></div>
+          <label class="field-label">K线周期</label>
+          <div class="chip-grid period-chips" id="periodChips">
+            <button data-period="1m">1分</button>
+            <button data-period="5m">5分</button>
+            <button data-period="15m">15分</button>
+            <button data-period="30m">30分</button>
+            <button data-period="60m">60分</button>
+            <button data-period="day" class="active">日线</button>
+            <button data-period="week">周线</button>
+            <button data-period="month">月线</button>
+          </div>
+          <label class="field-label">开局可见K线</label>
+          <div class="seg-choice" id="initialChips">
+            <button data-init="30">30根</button>
+            <button data-init="60" class="active">60根</button>
+            <button data-init="90">90根</button>
+          </div>
+          <button class="new-session" id="btnNew" type="button"><span>生成新题</span><i>→</i></button>
+          <div class="data-source" id="trainSource">正在连接历史行情…</div>
+        </section>
+
+        <section class="panel-card account-card">
+          <div class="panel-title"><span>模拟账户</span><span class="account-state" id="tradeStatus">空仓</span></div>
+          <div class="equity-line">
+            <div><small>总资产</small><b id="equityVal">¥1,000,000</b></div>
+            <span class="session-pnl" id="sessionPnl">0.00%</span>
+          </div>
+          <div class="account-grid">
+            <div><small>可用资金</small><b id="cashVal">¥1,000,000</b></div>
+            <div><small>持仓市值</small><b id="posVal">¥0</b></div>
+            <div><small>持仓数量</small><b id="sharesVal">0 股</b></div>
+            <div><small>持仓成本</small><b id="costVal">--</b></div>
+          </div>
+          <div class="trade-toggle" id="tradeSide">
+            <button data-side="buy" class="active" type="button">买入</button>
+            <button data-side="sell" type="button">卖出</button>
+          </div>
+          <div class="size-choice" id="sizeBtns">
+            <button data-frac="0.05">5%</button>
+            <button data-frac="0.1">10%</button>
+            <button data-frac="0.25">1/4仓</button>
+            <button data-frac="0.3333">1/3仓</button>
+            <button data-frac="0.5" class="active">半仓</button>
+            <button data-frac="0.6667">2/3仓</button>
+            <button data-frac="0.75">75%</button>
+            <button data-frac="1">全仓</button>
+          </div>
+          <div class="custom-size">
+            <div class="custom-size-head"><span>自定义仓位</span><b id="sizePct">50%</b></div>
+            <input id="sizeRange" type="range" min="5" max="100" step="1" value="50" aria-label="自定义仓位百分比">
+          </div>
+          <button class="trade-btn buy" id="btnTrade" type="button">买入 半仓</button>
+          <p class="trade-note">已计入佣金 0.025%（最低 5 元）与卖出印花税 0.05%，按 100 股整数手成交。</p>
+        </section>
+
+        <section class="panel-card live-card">
+          <div class="panel-title"><span>本局数据</span></div>
+          <div class="live-grid">
+            <div><small>交易次数</small><b id="liveTrades">0</b></div>
+            <div><small>已实现胜率</small><b id="liveWinRate">--</b></div>
+            <div><small>盈亏比</small><b id="livePF">--</b></div>
+            <div><small>最大回撤</small><b id="liveDD">0.00%</b></div>
+          </div>
+        </section>
+      </aside>
+    </div>
+
+    <div class="train-bottom">
+      <section class="panel-card hint-card">
+        <div class="panel-title"><span>当前形态提示</span><span class="tiny-tag soft">只用已看到的K线</span></div>
+        <div class="hint-empty" id="patternHintEmpty">
+          <span class="hint-orb">✦</span>
+          <div><b>看不出形态？</b><p>点击图表右上角「形态提示」，引擎会分析当前可见的走势，给出最接近的 3 个技术形态。</p></div>
+        </div>
+        <div class="hint-result" id="patternHintResult" hidden></div>
+      </section>
+      <section class="panel-card guide-card">
+        <div class="panel-title"><span>训练说明</span></div>
+        <ul class="guide-list">
+          <li><kbd>Space</kbd> 下一根K线，<kbd>B</kbd> 买入，<kbd>S</kbd> 卖出</li>
+          <li>200 根K线走完自动结算；也可以随时揭晓答案</li>
+          <li>账号资产、交易记录与训练成绩只保存在本机浏览器</li>
+          <li>随机片段来自真实历史数据，仅供训练，不构成投资建议</li>
+        </ul>
+      </section>
+    </div>
+  </main>
+
+  <!-- ======================= 数据统计 ======================= -->
+  <main class="tr-view" id="view-stats" hidden>
+    <section class="page-head">
+      <div>
+        <div class="tr-eyebrow">YOUR PROGRESS</div>
+        <h1>训练数据统计</h1>
+        <p>每一局的结果都会被记录，看看自己的胜率、盈亏比和成长曲线。</p>
+      </div>
+      <div class="head-actions">
+        <button class="btn-line" id="btnExportStats" type="button">导出 CSV</button>
+        <button class="btn-line danger" id="btnResetStats" type="button">清空记录</button>
+      </div>
+    </section>
+
+    <div class="summary-grid" id="statsSummary"></div>
+
+    <div class="stats-grid">
+      <section class="panel-card chart-panel">
+        <div class="panel-title"><span>收益成长曲线</span><span class="tiny-tag soft">按每局收益率复利</span></div>
+        <div id="equityChart" class="equity-chart"></div>
+        <div class="chart-legend-mini"><i class="up"></i>账户净值 <i class="line"></i>100万初始线</div>
+      </section>
+      <section class="panel-card period-panel">
+        <div class="panel-title"><span>分周期表现</span></div>
+        <div id="periodBreakdown" class="period-breakdown"></div>
+      </section>
+    </div>
+
+    <section class="panel-card records-panel">
+      <div class="panel-title"><span>训练记录</span><span class="record-count" id="recordCount">共 0 局</span></div>
+      <div class="table-wrap" id="statsTable"></div>
+    </section>
+  </main>
+
+  <!-- ======================= 形态分析 ======================= -->
+  <main class="tr-view" id="view-pattern" hidden>
+    <section class="page-head pattern-head">
+      <div>
+        <div class="tr-eyebrow">PATTERN LAB</div>
+        <h1>K线形态分析与训练</h1>
+        <p>先认识形态，再用真实K线做判断，最后把客户发来的截图拖进来做匹配分析。</p>
+      </div>
+      <div class="pattern-tabs" id="patternTabs">
+        <button data-tab="atlas" class="active">形态图鉴</button>
+        <button data-tab="quiz">形态测验</button>
+        <button data-tab="shot">截图分析</button>
+      </div>
+    </section>
+
+    <section class="murphy-bar">
+      <div class="murphy-mark">墨</div>
+      <div class="murphy-copy">
+        <b>形态识别标准：约翰·墨菲《期货市场技术分析》</b>
+        <p>第4章 趋势与缺口 · 第5章 反转形态 · 第6章 持续形态 · 第12章 日本蜡烛图</p>
+      </div>
+      <button class="mini-btn" id="btnMurphyNotes" type="button">查看书中体系 →</button>
+    </section>
+
+    <!-- 图鉴 -->
+    <section class="pattern-pane" id="pane-atlas">
+      <div class="atlas-toolbar">
+        <div class="search-box">
+          <span>⌕</span>
+          <input id="atlasSearch" type="search" placeholder="搜索形态，例如：双底、吞没、旗形…">
+        </div>
+        <div class="filter-chips" id="atlasFilters">
+          <button data-filter="all" class="active">全部</button>
+          <button data-filter="反转形态">反转形态</button>
+          <button data-filter="持续形态">持续形态</button>
+          <button data-filter="单K反转">单K反转</button>
+          <button data-filter="组合反转">组合反转</button>
+          <button data-filter="组合持续">组合持续</button>
+          <button data-filter="缺口反转">缺口反转</button>
+        </div>
+      </div>
+      <div class="atlas-grid" id="atlasGrid"></div>
+      <div class="atlas-empty" id="atlasEmpty" hidden>没有找到匹配的形态，换个关键词试试。</div>
+    </section>
+
+    <!-- 测验 -->
+    <section class="pattern-pane" id="pane-quiz" hidden>
+      <div class="quiz-layout">
+        <section class="panel-card quiz-card">
+          <div class="quiz-top">
+            <div>
+              <div class="quiz-kicker">墨菲形态 · 真实历史</div>
+              <div class="quiz-progress-text" id="quizProgressText">第 1 题</div>
+            </div>
+            <div class="quiz-score-mini">
+              <span>正确率 <b id="quizAccuracy">--</b></span>
+              <span>连对 <b id="quizStreak">0</b></span>
+            </div>
+          </div>
+          <div class="quiz-chart-row">
+            <div class="quiz-chart-wrap">
+              <div id="quizChart" class="quiz-chart"></div>
+              <div class="quiz-loading" id="quizLoading">
+                <span class="spinner"></span><b>正在从真实历史里找典型形态…</b>
+              </div>
+            </div>
+            <div class="quiz-zoom-wrap">
+              <div class="quiz-zoom-title"><span>题目区域放大</span><b id="quizFocusLabel">最后 55 根</b></div>
+              <div id="quizZoom" class="quiz-zoom"></div>
+              <div class="quiz-zoom-tip">只判断这个区域</div>
+            </div>
+          </div>
+          <div class="quiz-question">
+            <div class="quiz-q-title">只看蓝框内的K线，最符合下面哪种形态？</div>
+            <p class="quiz-q-hint" id="quizHint">蓝框是本题范围，右侧是同一区域的放大图；左侧K线只作趋势背景。</p>
+            <div class="quiz-options" id="quizOptions"></div>
+          </div>
+          <div class="quiz-feedback" id="quizFeedback" hidden></div>
+          <div class="quiz-foot">
+            <div class="quiz-streak" id="quizStreakText">从真实行情中随机出题，答案揭晓后会给出形态要点。</div>
+            <button class="btn-fill" id="btnNextQuiz" type="button">下一题 →</button>
+          </div>
+        </section>
+        <aside class="quiz-side">
+          <section class="panel-card">
+            <div class="panel-title"><span>怎么练</span></div>
+            <ol class="how-list">
+              <li><b>先看结构</b><span>高低点是在抬高、降低，还是走平？</span></li>
+              <li><b>再看位置</b><span>形态出现在上涨末端、下跌末端，还是趋势中继？</span></li>
+              <li><b>最后看确认</b><span>有没有突破、吞没或长影线？不要只凭单根K线。</span></li>
+            </ol>
+            <div class="quiz-period-row">
+              <span>出题周期</span>
+              <div class="seg-choice small" id="quizPeriod">
+                <button data-p="day" class="active">日线</button>
+                <button data-p="60m">60分</button>
+                <button data-p="week">周线</button>
+              </div>
+            </div>
+          </section>
+          <section class="panel-card pattern-stats-card">
+            <div class="panel-title"><span>测验成绩</span></div>
+            <div class="pattern-stat-grid">
+              <div><b id="psTotal">0</b><small>累计答题</small></div>
+              <div><b id="psCorrect">0</b><small>答对</small></div>
+              <div><b id="psBest">0</b><small>最高连对</small></div>
+            </div>
+            <div class="pattern-stat-note">成绩保存在本机浏览器，换设备不同步。</div>
+          </section>
+        </aside>
+      </div>
+    </section>
+
+    <!-- 截图分析 -->
+    <section class="pattern-pane" id="pane-shot" hidden>
+      <div class="shot-layout">
+        <section class="panel-card shot-card">
+          <div class="shot-drop" id="shotDrop">
+            <div class="drop-icon">
+              <svg viewBox="0 0 24 24" width="26" height="26" fill="none" stroke="currentColor" stroke-width="1.7"><path d="M12 16V4m0 0L7.5 8.5M12 4l4.5 4.5"/><path d="M4 15v3a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-3"/></svg>
+            </div>
+            <b>把客户发来的K线截图拖到这里</b>
+            <p>支持 PNG / JPG / WEBP，可一次添加多张；也可以点击选择，或直接 <kbd>Ctrl</kbd>+<kbd>V</kbd> 粘贴。</p>
+            <button class="btn-fill" id="btnPickImage" type="button">选择截图</button>
+            <input id="shotFile" type="file" accept="image/*" multiple hidden>
+            <div class="drop-privacy">截图只在本机浏览器解析，不会上传原图；仅将识别出的OHLC数据发送给本地形态引擎。</div>
+          </div>
+
+          <div class="shot-workspace" id="shotWorkspace" hidden>
+            <div class="shot-toolbar">
+              <div class="shot-thumbs" id="shotThumbs"></div>
+              <div class="shot-actions">
+                <div class="color-toggle" id="colorToggle">
+                  <button data-mode="cn" class="active" type="button">红涨绿跌</button>
+                  <button data-mode="intl" type="button">绿涨红跌</button>
+                </div>
+                <button class="mini-btn" id="btnAutoCrop" type="button">自动框选图表</button>
+                <button class="mini-btn" id="btnResetCrop" type="button">全图</button>
+                <button class="mini-btn" id="btnAddMore" type="button">+ 添加</button>
+                <button class="btn-fill small" id="btnAnalyzeShot" type="button">识别并分析</button>
+              </div>
+            </div>
+            <div class="shot-main">
+              <div class="shot-stage-wrap">
+                <div class="shot-stage" id="shotStage">
+                  <canvas id="shotCanvas"></canvas>
+                  <div class="shot-crop" id="shotCrop">
+                    <span class="crop-handle nw"></span><span class="crop-handle ne"></span>
+                    <span class="crop-handle sw"></span><span class="crop-handle se"></span>
+                    <span class="crop-label">价格K线区域</span>
+                  </div>
+                </div>
+                <div class="shot-stage-hint">拖动框选区域，只保留价格K线（不要框入成交量、指标或文字）。</div>
+              </div>
+              <aside class="shot-result" id="shotResult">
+                <div class="shot-result-empty">
+                  <div class="result-empty-icon">⌁</div>
+                  <b>等待识别</b>
+                  <p>框好价格K线区域后点击「识别并分析」，系统会从像素中还原 OHLC，再匹配技术形态。</p>
+                  <ul>
+                    <li>截图越清晰，识别越准确</li>
+                    <li>只框价格K线，避开成交量副图和文字</li>
+                    <li>识别结果可在下方重建图中核对</li>
+                  </ul>
+                </div>
+              </aside>
+            </div>
+            <div class="shot-rebuild" id="shotRebuild" hidden>
+              <div class="panel-title"><span>还原出的K线</span><span class="tiny-tag soft" id="shotBarsCount">0 根</span></div>
+              <div id="shotRebuildChart" class="shot-rebuild-chart"></div>
+            </div>
+          </div>
+        </section>
+      </div>
+    </section>
+  </main>
+
+  <footer class="tr-footer">
+    <span>K线训练营 · 数据来自通达信本地历史 / 腾讯历史行情</span>
+    <span>训练结果不构成投资建议</span>
+  </footer>
+</div>
+
+<!-- 形态详情 -->
+<div class="tr-modal" id="patternModal" hidden>
+  <div class="tr-modal-mask" data-close="1"></div>
+  <div class="pattern-modal-card">
+    <button class="modal-x" id="btnClosePattern" type="button">×</button>
+    <div class="pattern-modal-head">
+      <div>
+        <div class="pattern-cat" id="modalCat">反转形态</div>
+        <h2 id="modalName">双底（W底）</h2>
+        <span class="direction-pill" id="modalDirection">偏多</span>
+        <div class="pattern-book-ref" id="modalChapter">第5章 反转形态</div>
+      </div>
+      <canvas id="modalThumb" width="420" height="190"></canvas>
+    </div>
+    <p class="pattern-modal-desc" id="modalDesc"></p>
+    <div class="pattern-modal-grid">
+      <div><h4>识别要点</h4><ul id="modalPoints"></ul></div>
+      <div><h4>参考买点 / 卖点</h4><p id="modalEntry"></p><h4>形态失效</h4><p id="modalInvalid"></p></div>
+      <div>
+        <h4>书中章节</h4><p id="modalChapterText"></p>
+        <h4>测算目标</h4><p id="modalTarget"></p>
+        <h4>量能确认</h4><p id="modalVolume"></p>
+      </div>
+    </div>
+    <div class="modal-note">按《期货市场技术分析》（约翰·墨菲）整理。形态识别是概率工具，必须结合趋势、量能和失效条件。</div>
+  </div>
+</div>
+
+<!-- 墨菲形态体系摘要 -->
+<div class="tr-modal" id="murphyModal" hidden>
+  <div class="tr-modal-mask" data-close="1"></div>
+  <div class="murphy-modal-card">
+    <button class="modal-x" id="btnCloseMurphy" type="button">×</button>
+    <div class="murphy-modal-head">
+      <div class="pattern-cat">JOHN J. MURPHY · TECHNICAL ANALYSIS</div>
+      <h2>墨菲形态体系</h2>
+      <p>按《期货市场技术分析》章节整理的识别框架；不是原书替代，而是本工具的规则说明。</p>
+    </div>
+    <div class="murphy-chapter-grid">
+      <section>
+        <h4>第4章 · 趋势与缺口</h4>
+        <ul>
+          <li>趋势由依次抬高/降低的高点与低点定义</li>
+          <li>支撑与阻力是区域；突破后角色互换</li>
+          <li>趋势线、通道、33/50/66% 回撤</li>
+          <li>突破缺口、持续缺口、衰竭缺口、岛形反转</li>
+        </ul>
+      </section>
+      <section>
+        <h4>第5章 · 反转形态</h4>
+        <ul>
+          <li>头肩顶/底、三重顶/底、双顶/底</li>
+          <li>圆弧顶/底、V形反转</li>
+          <li>必须有前置趋势，跌破/突破颈线才确认</li>
+          <li>用形态高度测算目标，跌破形态低点失效</li>
+        </ul>
+      </section>
+      <section>
+        <h4>第6章 · 持续形态</h4>
+        <ul>
+          <li>对称/上升/下降三角形</li>
+          <li>旗形、三角旗、矩形、上升/下降楔形</li>
+          <li>整理期通常缩量，突破时需放量</li>
+          <li>用旗杆或形态最宽处测算目标</li>
+        </ul>
+      </section>
+      <section>
+        <h4>第12章 · 日本蜡烛图</h4>
+        <ul>
+          <li>十字星、刺透、乌云盖顶</li>
+          <li>早晨之星、黄昏之星</li>
+          <li>上升三法、下降三法</li>
+          <li>蜡烛图信号必须由后续K线和量能确认</li>
+        </ul>
+      </section>
+    </div>
+    <div class="murphy-rules">
+      <b>统一确认顺序</b>
+      <span>① 前置趋势</span><span>② 形态边界</span><span>③ 颈线/趋势线突破</span><span>④ 量能</span><span>⑤ 测算目标</span><span>⑥ 失效条件</span>
+    </div>
+    <p class="murphy-source">
+      学习摘要参考：约翰·墨菲《期货市场技术分析》（丁圣元译）章节结构；正版电子书可在微信读书阅读。
+      本工具只实现可量化的形态规则，不复制原书正文。
+    </p>
+  </div>
+</div>
+
+<div class="ind-panel" id="indPanel" hidden>
+  <div class="ind-panel-head">
+    <div>
+      <b>技术指标</b>
+      <small>修改后立即生效 · 仅使用当前已看到的K线</small>
+    </div>
+    <button class="modal-x ind-close" id="btnIndClose" type="button" title="关闭">×</button>
+  </div>
+  <div class="ind-panel-body">
+    <section class="ind-section">
+      <div class="ind-section-title">主图叠加</div>
+      <div class="ind-switch-grid">
+        <label class="ind-switch"><input type="checkbox" id="indMA"><span>均线 MA</span></label>
+        <label class="ind-switch"><input type="checkbox" id="indYW"><span>黄白线</span></label>
+      </div>
+      <div class="ind-param-grid" id="maParams">
+        <label>MA1<input type="number" id="indMa0" min="2" max="250" step="1"></label>
+        <label>MA2<input type="number" id="indMa1" min="2" max="250" step="1"></label>
+        <label>MA3<input type="number" id="indMa2" min="2" max="250" step="1"></label>
+        <label>MA4<input type="number" id="indMa3" min="2" max="250" step="1"></label>
+      </div>
+      <div class="ind-param-grid yw" id="ywParams">
+        <label>白线 EMA1<input type="number" id="indEma1" min="2" max="80" step="1"></label>
+        <label>白线 EMA2<input type="number" id="indEma2" min="2" max="80" step="1"></label>
+        <label>黄线 MA1<input type="number" id="indYellow0" min="2" max="250" step="1"></label>
+        <label>黄线 MA2<input type="number" id="indYellow1" min="2" max="250" step="1"></label>
+        <label>黄线 MA3<input type="number" id="indYellow2" min="2" max="250" step="1"></label>
+        <label>黄线 MA4<input type="number" id="indYellow3" min="2" max="250" step="1"></label>
+      </div>
+    </section>
+
+    <section class="ind-section">
+      <div class="ind-section-title">副图指标</div>
+      <div class="ind-tabs" id="subTabs">
+        <button type="button" data-sub="none">无</button>
+        <button type="button" data-sub="brick">砖形图</button>
+        <button type="button" data-sub="kdj">KDJ</button>
+        <button type="button" data-sub="bupiao">补票四线</button>
+      </div>
+      <div id="indParams" class="ind-params"></div>
+    </section>
+
+    <section class="ind-section ind-value-section">
+      <div class="ind-section-title">当前数值 <span id="indValueHint">--</span></div>
+      <div id="indValues" class="ind-values"></div>
+    </section>
+  </div>
+  <div class="ind-panel-foot">
+    <button class="btn-line" id="btnIndReset" type="button">恢复默认</button>
+    <button class="btn-fill" id="btnIndApply" type="button">完成</button>
+  </div>
+</div>
+
+<div class="tr-toast" id="toast" hidden></div>
+
+<script src="/echarts.min.js"></script>
+<script src="/training.js"></script>
+<script src="/pattern-lab.js"></script>
+</body>
+</html>

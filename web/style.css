@@ -1,4 +1,4 @@
-﻿/* ===== 每日选股 · 简洁大字号界面 ===== */
+/* ===== 每日选股 · 简洁大字号界面 ===== */
 :root {
   --bg: #f3f5fa;
   --card: #ffffff;
@@ -102,6 +102,9 @@ b { font-weight: 700; }
   transition: .15s;
 }
 .icon-btn:hover { border-color: #c9d6f5; color: var(--primary); }
+a.icon-btn { display: inline-flex; align-items: center; gap: 5px; text-decoration: none; }
+a.train-entry { background: #1b2436; border-color: #1b2436; color: #fff; font-weight: 600; }
+a.train-entry:hover { background: #2f6bff; border-color: #2f6bff; color: #fff; }
 
 /* ---------- 卡片 ---------- */
 .card {

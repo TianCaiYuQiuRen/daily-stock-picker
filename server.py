@@ -21,8 +21,8 @@ ROOT = os.path.dirname(os.path.abspath(__file__))
 if ROOT not in sys.path:
     sys.path.insert(0, ROOT)
 
-from core import (chart_series, config, engine, history, online, quotes,  # noqa: E402
-                  sell, snapshot, strategies, tdx_block)
+from core import (chart_series, config, engine, history, online, patterns,  # noqa: E402
+                  quotes, sell, snapshot, strategies, tdx_block, training)
 from core.tdx_local import TdxStore, board_of  # noqa: E402
 
 WEB_DIR = config.WEB_DIR
@@ -460,6 +460,8 @@ class Handler(BaseHTTPRequestHandler):
             path = parsed.path
             if path == "/" or path == "/index.html":
                 return self._static("index.html")
+            if path in ("/training", "/training/", "/training.html"):
+                return self._static("training.html")
             if path.startswith("/api/"):
                 return self._api_get(path, parse_qs(parsed.query))
             return self._static(path)
@@ -538,6 +540,26 @@ class Handler(BaseHTTPRequestHandler):
                 if action == "stop":
                     return self._json({"ok": True, "share": SHARE.stop()})
                 return self._json({"ok": True, "share": SHARE.status()})
+
+            if path == "/api/training/quiz/answer":
+                qid = str(data.get("id") or "").strip()
+                if not qid:
+                    return self._json({"ok": False, "error": "缺少题目 id"}, 400)
+                try:
+                    return self._json(training.answer_quiz(qid, data.get("choice")))
+                except KeyError as exc:
+                    return self._json({"ok": False, "error": str(exc.args[0])}, 404)
+                except Exception as exc:  # noqa: BLE001
+                    return self._json({"ok": False, "error": str(exc)}, 502)
+
+            if path == "/api/pattern/analyze":
+                bars = data.get("bars")
+                if not isinstance(bars, list):
+                    return self._json({"ok": False, "error": "请提供从截图中识别出的K线数据"}, 400)
+                if len(bars) > 600:
+                    bars = bars[-600:]
+                result = patterns.analyze(bars)
+                return self._json(result, 200 if result.get("ok") else 400)
 
             return self._json({"ok": False, "error": "not found"}, 404)
         except (BrokenPipeError, ConnectionResetError):
@@ -671,6 +693,45 @@ class Handler(BaseHTTPRequestHandler):
             return self._json({"config": public_config(cfg)})
         if path == "/api/share":
             return self._json({"share": SHARE.status()})
+
+        if path == "/api/training/session":
+            period = (query.get("period") or ["day"])[0]
+            initial = (query.get("initial") or ["60"])[0]
+            try:
+                initial = int(initial)
+            except (TypeError, ValueError):
+                initial = 60
+            try:
+                return self._json(training.make_session(period, initial))
+            except Exception as exc:  # noqa: BLE001
+                return self._json({"ok": False, "error": str(exc)}, 502)
+
+        if path == "/api/training/reveal":
+            sid = (query.get("id") or [""])[0].strip()
+            if not sid:
+                return self._json({"ok": False, "error": "缺少训练 id"}, 400)
+            try:
+                return self._json(training.reveal_session(sid))
+            except KeyError as exc:
+                return self._json({"ok": False, "error": str(exc.args[0])}, 404)
+            except Exception as exc:  # noqa: BLE001
+                return self._json({"ok": False, "error": str(exc)}, 502)
+
+        if path == "/api/training/quiz":
+            period = (query.get("period") or ["day"])[0]
+            try:
+                return self._json(training.make_quiz(period))
+            except Exception as exc:  # noqa: BLE001
+                return self._json({"ok": False, "error": str(exc)}, 502)
+
+        if path in ("/api/patterns", "/api/training/patterns"):
+            return self._json({
+                "ok": True,
+                "periods": [{"key": k, "label": training.PERIODS[k]["label"]}
+                            for k in training.PERIOD_ORDER],
+                "patterns": patterns.library(),
+            })
+
         return self._json({"ok": False, "error": "not found"}, 404)
 
 

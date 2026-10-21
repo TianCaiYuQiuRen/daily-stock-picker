@@ -1,17 +1,20 @@
 @echo off
 chcp 65001 >nul
+setlocal
 cd /d "%~dp0"
-title 每日选股系统
+title Daily Stock Picker
 
-rem 如果服务已经在运行，直接打开网页
+rem Open the stock picker if the service is already running.
 powershell -NoProfile -Command "try { Invoke-WebRequest 'http://127.0.0.1:8765/api/state' -UseBasicParsing -TimeoutSec 2 | Out-Null; exit 0 } catch { exit 1 }"
 if %errorlevel%==0 (
-  start "" "http://127.0.0.1:8765"
+  powershell -NoProfile -Command "Start-Process 'http://127.0.0.1:8765'"
   exit /b 0
 )
 
 start "" /min powershell -NoProfile -WindowStyle Hidden -Command "Start-Sleep 2; Start-Process 'http://127.0.0.1:8765'"
-python server.py
+set "PY=python"
+if exist "%~dp0python\python.exe" set "PY=%~dp0python\python.exe"
+"%PY%" server.py
 echo.
-echo 服务已停止，按任意键关闭窗口。
+echo Server stopped. Press any key to close this window.
 pause >nul
