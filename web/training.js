@@ -18,7 +18,8 @@
     yw: true,
     ema: [10, 10],
     yellowPeriods: [14, 28, 57, 114],
-    sub: "brick",
+    subs: ["brick", "kdj"],
+    activeSub: "brick",
     brick: { range: 4, smooth1: 4, smooth2: 6, smooth3: 6, threshold: 4 },
     kdj: { n: 9, m1: 3, m2: 3, over: 80, under: 20 },
     bupiao: { short: 3, mid: 10, midlong: 20, long: 21, level: 75 },
@@ -168,7 +169,16 @@
       if (saved && typeof saved === "object") {
         out.ma = !!saved.ma;
         out.yw = !!saved.yw;
-        out.sub = ["none", "brick", "kdj", "bupiao"].includes(saved.sub) ? saved.sub : out.sub;
+        const validSubs = ["brick", "kdj", "bupiao"];
+        let subs = null;
+        if (Array.isArray(saved.subs)) {
+          subs = saved.subs.filter((x) => validSubs.includes(x));
+        } else if (saved.sub && validSubs.includes(saved.sub)) {
+          subs = [saved.sub];
+        }
+        if (subs) out.subs = Array.from(new Set(subs)).slice(0, 3);
+        if (!out.subs.length) out.subs = ["brick"];
+        out.activeSub = out.subs.includes(saved.activeSub) ? saved.activeSub : out.subs[0];
         if (Array.isArray(saved.maPeriods)) {
           out.maPeriods = out.maPeriods.map((v, i) => clampNum(saved.maPeriods[i], 2, 250, v));
         }
@@ -212,24 +222,57 @@
   function saveFraction() {
     try { localStorage.setItem(SIZE_KEY, String(state.frac)); } catch (e) { /* ignore */ }
   }
+  function cumulativeReturn(sessions) {
+    const list = sessions || [];
+    if (!list.length) return null;
+    let factor = 1;
+    list.forEach((s) => { factor *= 1 + (Number(s.returnPct) || 0) / 100; });
+    return (factor - 1) * 100;
+  }
+
   function refreshHero() {
     const sessions = state.stats.sessions || [];
     const today = new Date().toDateString();
     const todayCount = sessions.filter((s) => new Date(s.ts).toDateString() === today).length;
     const trades = sessions.reduce((a, s) => a + (s.trades || 0), 0);
     const wins = sessions.reduce((a, s) => a + (s.wins || 0), 0);
+    const cum = cumulativeReturn(sessions);
     $("heroToday").textContent = todayCount;
     $("heroSessions").textContent = sessions.length;
     $("heroWinRate").textContent = trades ? (wins / trades * 100).toFixed(1) + "%" : "--";
+    const hr = $("heroReturn");
+    if (hr) {
+      hr.textContent = cum === null ? "--" : fmtPct(cum);
+      hr.className = cum === null ? "" : pctClass(cum);
+    }
+    renderTrainDataMini();
+  }
+
+  function renderTrainDataMini() {
+    if (!$("trainCumRet")) return;
+    const sessions = state.stats.sessions || [];
+    const total = sessions.length;
+    const trades = sessions.reduce((a, s) => a + (s.trades || 0), 0);
+    const wins = sessions.reduce((a, s) => a + (s.wins || 0), 0);
+    const cum = cumulativeReturn(sessions);
+    const avg = total ? sessions.reduce((a, s) => a + (Number(s.returnPct) || 0), 0) / total : null;
+    const gp = sessions.reduce((a, s) => a + Math.max(0, Number(s.returnPct) || 0), 0);
+    const gl = Math.abs(sessions.reduce((a, s) => a + Math.min(0, Number(s.returnPct) || 0), 0));
+    $("trainDataCount").textContent = total + " 局";
+    $("trainCumRet").textContent = cum === null ? "--" : fmtPct(cum);
+    $("trainCumRet").className = cum === null ? "" : pctClass(cum);
+    $("trainCumAvg").textContent = total ? "平均 " + fmtPct(avg) + " / 局" : "还没有完成训练";
+    $("trainDataWin").textContent = trades ? (wins / trades * 100).toFixed(1) + "%" : "--";
+    $("trainDataPF").textContent = gl ? (gp / gl).toFixed(2) : (gp ? "∞" : "--");
   }
 
   /* ---------------------------------------------------------------
      导航
   --------------------------------------------------------------- */
   function switchView(view, updateHash) {
-    if (!["train", "stats", "pattern"].includes(view)) view = "train";
+    if (!["train", "stats", "pattern", "book"].includes(view)) view = "train";
     state.view = view;
-    ["train", "stats", "pattern"].forEach((v) => {
+    ["train", "stats", "pattern", "book"].forEach((v) => {
       $("view-" + v).hidden = v !== view;
       const btn = document.querySelector('#mainNav button[data-view="' + v + '"]');
       if (btn) btn.classList.toggle("active", v === view);
@@ -238,6 +281,7 @@
     if (view === "pattern") {
       if (window.KPattern) window.KPattern.activate();
     }
+    if (view === "book" && window.KBook) window.KBook.activate();
     if (view !== "train") closeIndicatorPanel();
     if (updateHash !== false) {
       const hash = view === "train" ? "" : "#" + view;
@@ -329,7 +373,7 @@
       });
     }
 
-    if (P.sub === "brick") {
+    if (P.subs.includes("brick")) {
       const p = P.brick;
       const hh = rollingMax(highs, p.range);
       const ll = rollingMin(lows, p.range);
@@ -343,7 +387,8 @@
       const var4 = smaTdx(var3, p.smooth2, 1);
       const var5 = smaTdx(var4, p.smooth3, 1).map((v) => v + 100);
       out.brick = var5.map((v, i) => (v - var2[i]) > p.threshold ? (v - var2[i]) - p.threshold : 0);
-    } else if (P.sub === "kdj") {
+    }
+    if (P.subs.includes("kdj")) {
       const p = P.kdj;
       const hh = rollingMax(highs, p.n);
       const ll = rollingMin(lows, p.n);
@@ -356,7 +401,8 @@
       out.k = smaTdx(rsv, p.m1, 1);
       out.d = smaTdx(out.k, p.m2, 1);
       out.j = out.k.map((v, i) => 3 * v - 2 * out.d[i]);
-    } else if (P.sub === "bupiao") {
+    }
+    if (P.subs.includes("bupiao")) {
       const p = P.bupiao;
       const line = (n) => {
         const hh = rollingMax(closes, n);
@@ -420,7 +466,9 @@
     const end = off + n;
     const slice = (arr) => (arr ? arr.slice(off, end) : []);
     const ind = state.indicator;
-    const hasSub = ind.sub !== "none" && !!state.ind;
+    const subs = (ind.subs || []).filter((x) => ["brick", "kdj", "bupiao"].includes(x)).slice(0, 3);
+    const hasSub = subs.length > 0 && !!state.ind;
+    const subCount = hasSub ? subs.length : 0;
     const last = bars[bars.length - 1];
     const candle = bars.map((b) => [b.o, b.c, b.l, b.h]);
     const vol = bars.map((b) => ({
@@ -432,24 +480,35 @@
       coord: [t.bar - 1, t.price],
       value: t.side === "buy" ? "B" : "S",
       itemStyle: { color: t.side === "buy" ? UP : DOWN, borderColor: "#fff", borderWidth: 1 },
-      label: { show: true, formatter: t.side === "buy" ? "B" : "S", color: "#fff", fontSize: 9, fontWeight: 700 },
+      label: { show: true, formatter: t.side === "buy" ? "B" : "S", color: "#fff", fontSize: 11, fontWeight: 700 },
     }));
     const axisColor = "#6f7f9b";
-    const grids = hasSub ? [
-      { left: 16, right: 62, top: 18, height: "48%" },
-      { left: 16, right: 62, top: "69%", height: "8%" },
-      { left: 16, right: 62, top: "80%", height: "15%" },
-    ] : [
-      { left: 16, right: 62, top: 18, height: "63%" },
-      { left: 16, right: 62, top: "83%", height: "10%" },
-    ];
+    // 副图数量：成交量 + 0~3 个指标，最多 4 个副图。
+    const layoutsBySub = {
+      0: [
+        { top: 18, height: "63%" }, { top: "83%", height: "10%" },
+      ],
+      1: [
+        { top: 18, height: "48%" }, { top: "69%", height: "8%" }, { top: "80%", height: "15%" },
+      ],
+      2: [
+        { top: 18, height: "40%" }, { top: "57%", height: "7%" },
+        { top: "67%", height: "12%" }, { top: "82%", height: "12%" },
+      ],
+      3: [
+        { top: 18, height: "34%" }, { top: "48%", height: "7%" },
+        { top: "58%", height: "10%" }, { top: "70%", height: "10%" }, { top: "82%", height: "10%" },
+      ],
+    };
+    const layouts = layoutsBySub[subCount] || layoutsBySub[0];
+    const grids = layouts.map((l) => ({ left: 16, right: 62, top: l.top, height: l.height }));
     function catAxis(gridIndex, showLabels) {
       return {
         type: "category", data: labels, boundaryGap: true, gridIndex: gridIndex,
         axisLine: { lineStyle: { color: "rgba(130,150,185,.2)" } },
         axisTick: { show: false },
         axisLabel: {
-          show: showLabels, color: axisColor, fontSize: 9, margin: 8,
+          show: showLabels, color: axisColor, fontSize: 11, margin: 8,
           interval: Math.max(0, Math.ceil(n / 7) - 1),
           formatter: axisLabel,
         },
@@ -457,14 +516,13 @@
         axisPointer: { label: { show: showLabels } },
       };
     }
-    const xAxes = [catAxis(0, false), catAxis(1, !hasSub)];
-    if (hasSub) xAxes.push(catAxis(2, true));
+    const xAxes = grids.map((_, i) => catAxis(i, i === grids.length - 1));
     const yAxes = [
       {
         scale: true, position: "right", gridIndex: 0,
         axisLine: { show: false }, axisTick: { show: false },
         axisLabel: {
-          color: axisColor, fontSize: 9, margin: 8,
+          color: axisColor, fontSize: 11, margin: 8,
           formatter: (v) => (v >= 1000 ? (v / 1000).toFixed(1) + "k" : v.toFixed(v < 10 ? 2 : 1)),
         },
         splitLine: { lineStyle: { color: "rgba(130,150,185,.10)", type: "dashed" } },
@@ -475,23 +533,23 @@
         splitLine: { show: false },
       },
     ];
-    if (hasSub) {
+    subs.forEach((type, i) => {
       yAxes.push({
-        scale: true, gridIndex: 2, position: "right",
-        min: ind.sub === "bupiao" ? 0 : undefined,
-        max: ind.sub === "bupiao" ? 100 : undefined,
+        scale: true, gridIndex: 2 + i, position: "right",
+        min: type === "bupiao" ? 0 : undefined,
+        max: type === "bupiao" ? 100 : undefined,
         axisLine: { show: false }, axisTick: { show: false },
-        axisLabel: { color: axisColor, fontSize: 8, margin: 7, formatter: (v) => Math.round(v) },
+        axisLabel: { color: axisColor, fontSize: 10, margin: 7, formatter: (v) => Math.round(v) },
         splitLine: { lineStyle: { color: "rgba(130,150,185,.08)", type: "dashed" } },
       });
-    }
+    });
 
     const series = [{
       name: "K线", type: "candlestick", data: candle,
       itemStyle: { color: UP, color0: DOWN, borderColor: UP, borderColor0: DOWN, borderWidth: 1 },
       markPoint: {
         symbol: "circle", symbolSize: 18, data: markers,
-        label: { show: true, color: "#fff", fontSize: 9, fontWeight: 700 },
+        label: { show: true, color: "#fff", fontSize: 11, fontWeight: 700 },
       },
       markLine: {
         silent: true, symbol: "none",
@@ -499,7 +557,7 @@
           yAxis: last.c,
           lineStyle: { color: "rgba(141,167,220,.5)", type: "dashed", width: 1 },
           label: {
-            show: true, position: "end", color: "#9fb4dc", fontSize: 9,
+            show: true, position: "end", color: "#9fb4dc", fontSize: 11,
             formatter: last.c.toFixed(2), backgroundColor: "rgba(20,31,52,.9)", padding: [2, 4], borderRadius: 3,
           },
         }] : [],
@@ -533,65 +591,69 @@
       symbol: "none", lineStyle: { width: 1, color: "rgba(160,185,230,.55)" }, itemStyle: { color: "#a0b9e6" },
     });
 
-    if (hasSub && ind.sub === "brick") {
-      const full = state.ind.brick || [];
-      const data = [];
-      for (let i = off; i < end; i++) {
-        const v = full[i] || 0;
-        const prev = i > 0 ? (full[i - 1] || 0) : 0;
-        let color = "#50617d";
-        if (v > 0 && v >= prev) color = UP;
-        else if (v < prev) color = DOWN;
-        data.push({ value: Number(v.toFixed(2)), itemStyle: { color: color } });
-      }
-      series.push({
-        name: "砖形图", type: "bar", xAxisIndex: 2, yAxisIndex: 2, data: data,
-        barWidth: "56%", itemStyle: { borderRadius: [1, 1, 0, 0] },
-      });
-    } else if (hasSub && ind.sub === "kdj") {
-      series.push({ name: "K", type: "line", xAxisIndex: 2, yAxisIndex: 2, data: slice(state.ind.k),
-        symbol: "none", lineStyle: { width: 1.2, color: "#ffd166" }, itemStyle: { color: "#ffd166" } });
-      series.push({ name: "D", type: "line", xAxisIndex: 2, yAxisIndex: 2, data: slice(state.ind.d),
-        symbol: "none", lineStyle: { width: 1.2, color: "#8fb1ff" }, itemStyle: { color: "#8fb1ff" } });
-      series.push({ name: "J", type: "line", xAxisIndex: 2, yAxisIndex: 2, data: slice(state.ind.j),
-        symbol: "none", lineStyle: { width: 1.2, color: "#ff8fab" }, itemStyle: { color: "#ff8fab" },
-        markLine: {
-          silent: true, symbol: "none",
-          data: [
-            { yAxis: ind.kdj.over, lineStyle: { color: "rgba(255,143,171,.35)", type: "dashed" },
-              label: { show: true, position: "end", formatter: String(ind.kdj.over), color: "#b98499", fontSize: 8 } },
-            { yAxis: ind.kdj.under, lineStyle: { color: "rgba(143,177,255,.28)", type: "dashed" },
-              label: { show: true, position: "end", formatter: String(ind.kdj.under), color: "#7f92b5", fontSize: 8 } },
-          ],
-        },
-      });
-    } else if (hasSub && ind.sub === "bupiao") {
-      const bp = state.ind.bupiao || { short: [], mid: [], midlong: [], long: [] };
-      const specs = [
-        ["短期", bp.short, "#ffd166"],
-        ["中期", bp.mid, "#ff8fab"],
-        ["中长期", bp.midlong, "#9d8cff"],
-        ["长期", bp.long, "#5ad1c8"],
-      ];
-      specs.forEach((sp, i) => {
+    subs.forEach((type, si) => {
+      const gi = 2 + si;
+      if (type === "brick") {
+        const full = state.ind.brick || [];
+        const data = [];
+        for (let i = off; i < end; i++) {
+          const v = full[i] || 0;
+          const prev = i > 0 ? (full[i - 1] || 0) : 0;
+          let color = "#50617d";
+          if (v > 0 && v >= prev) color = UP;
+          else if (v < prev) color = DOWN;
+          data.push({ value: Number(v.toFixed(2)), itemStyle: { color: color } });
+        }
         series.push({
-          name: "补票" + sp[0], type: "line", xAxisIndex: 2, yAxisIndex: 2, data: slice(sp[1]),
-          symbol: "none", lineStyle: { width: i === 0 ? 1.4 : 1, color: sp[2], opacity: .95 }, itemStyle: { color: sp[2] },
+          name: "砖形图" + (si ? si + 1 : ""), type: "bar", xAxisIndex: gi, yAxisIndex: gi, data: data,
+          barWidth: "56%", itemStyle: { borderRadius: [1, 1, 0, 0] },
         });
-      });
-      series[series.length - 4].markLine = {
-        silent: true, symbol: "none",
-        data: [{ yAxis: ind.bupiao.level,
-          lineStyle: { color: "rgba(255,209,102,.35)", type: "dashed" },
-          label: { show: true, position: "end", formatter: String(ind.bupiao.level), color: "#b7a46e", fontSize: 8 } }],
-      };
-    }
+      } else if (type === "kdj") {
+        series.push({ name: "K" + (si ? si + 1 : ""), type: "line", xAxisIndex: gi, yAxisIndex: gi, data: slice(state.ind.k),
+          symbol: "none", lineStyle: { width: 1.2, color: "#ffd166" }, itemStyle: { color: "#ffd166" } });
+        series.push({ name: "D" + (si ? si + 1 : ""), type: "line", xAxisIndex: gi, yAxisIndex: gi, data: slice(state.ind.d),
+          symbol: "none", lineStyle: { width: 1.2, color: "#8fb1ff" }, itemStyle: { color: "#8fb1ff" } });
+        series.push({ name: "J" + (si ? si + 1 : ""), type: "line", xAxisIndex: gi, yAxisIndex: gi, data: slice(state.ind.j),
+          symbol: "none", lineStyle: { width: 1.2, color: "#ff8fab" }, itemStyle: { color: "#ff8fab" },
+          markLine: {
+            silent: true, symbol: "none",
+            data: [
+              { yAxis: ind.kdj.over, lineStyle: { color: "rgba(255,143,171,.35)", type: "dashed" },
+                label: { show: true, position: "end", formatter: String(ind.kdj.over), color: "#b98499", fontSize: 10 } },
+              { yAxis: ind.kdj.under, lineStyle: { color: "rgba(143,177,255,.28)", type: "dashed" },
+                label: { show: true, position: "end", formatter: String(ind.kdj.under), color: "#7f92b5", fontSize: 10 } },
+            ],
+          },
+        });
+      } else if (type === "bupiao") {
+        const bp = state.ind.bupiao || { short: [], mid: [], midlong: [], long: [] };
+        const specs = [
+          ["短期", bp.short, "#ffd166"],
+          ["中期", bp.mid, "#ff8fab"],
+          ["中长期", bp.midlong, "#9d8cff"],
+          ["长期", bp.long, "#5ad1c8"],
+        ];
+        specs.forEach((sp, i) => {
+          series.push({
+            name: "补票" + sp[0] + (si ? si + 1 : ""), type: "line", xAxisIndex: gi, yAxisIndex: gi, data: slice(sp[1]),
+            symbol: "none", lineStyle: { width: i === 0 ? 1.4 : 1, color: sp[2], opacity: .95 }, itemStyle: { color: sp[2] },
+          });
+        });
+        series[series.length - 4].markLine = {
+          silent: true, symbol: "none",
+          data: [{ yAxis: ind.bupiao.level,
+            lineStyle: { color: "rgba(255,209,102,.35)", type: "dashed" },
+            label: { show: true, position: "end", formatter: String(ind.bupiao.level), color: "#b7a46e", fontSize: 10 } }],
+        };
+      }
+    });
 
     const subNames = { brick: "砖形图", kdj: "KDJ", bupiao: "补票四线" };
-    const graphic = hasSub ? [{
-      type: "text", left: 19, top: "80.6%",
-      style: { text: subNames[ind.sub] || "副图", fill: "#71819d", font: "9px -apple-system, sans-serif" },
-    }] : [];
+    const graphic = subs.map((type, i) => ({
+      type: "text", left: 19,
+      top: (parseFloat(layouts[2 + i].top) + 0.8) + "%",
+      style: { text: subNames[type] || "副图", fill: "#71819d", font: "9px -apple-system, sans-serif" },
+    }));
 
     return {
       animation: false,
@@ -605,7 +667,7 @@
         borderColor: "rgba(130,157,205,.3)",
         borderWidth: 1,
         padding: [9, 11],
-        textStyle: { color: "#dce5f6", fontSize: 11 },
+        textStyle: { color: "#dce5f6", fontSize: 12 },
         formatter: function (params) {
           if (!params || !params.length) return "";
           const kp = params.find((p) => p.seriesName === "K线") || params[0];
@@ -652,18 +714,20 @@
       if (w !== null) rows.push("白 " + fmtInd(w));
       if (y !== null) rows.push("黄 " + fmtInd(y));
     }
-    if (ind.sub === "brick") {
-      const v = valueAt(state.ind.brick, i);
-      const pv = valueAt(state.ind.brick, i - 1);
-      if (v !== null) rows.push("砖 " + fmtInd(v) + (pv !== null ? " (" + (v >= pv ? "+" : "") + fmtInd(v - pv) + ")" : ""));
-    } else if (ind.sub === "kdj") {
-      const k = valueAt(state.ind.k, i), d = valueAt(state.ind.d, i), j = valueAt(state.ind.j, i);
-      if (k !== null) rows.push("K " + fmtInd(k) + "  D " + fmtInd(d) + "  J " + fmtInd(j));
-    } else if (ind.sub === "bupiao") {
-      const bp = state.ind.bupiao;
-      if (bp) rows.push("补 " + ["short", "mid", "midlong", "long"].map((f, j) =>
-        ["短", "中", "中长", "长"][j] + " " + fmtInd(valueAt(bp[f], i), 0)).join("  "));
-    }
+    (ind.subs || []).forEach((type) => {
+      if (type === "brick") {
+        const v = valueAt(state.ind.brick, i);
+        const pv = valueAt(state.ind.brick, i - 1);
+        if (v !== null) rows.push("砖 " + fmtInd(v) + (pv !== null ? " (" + (v >= pv ? "+" : "") + fmtInd(v - pv) + ")" : ""));
+      } else if (type === "kdj") {
+        const k = valueAt(state.ind.k, i), d = valueAt(state.ind.d, i), j = valueAt(state.ind.j, i);
+        if (k !== null) rows.push("K " + fmtInd(k) + "  D " + fmtInd(d) + "  J " + fmtInd(j));
+      } else if (type === "bupiao") {
+        const bp = state.ind.bupiao;
+        if (bp) rows.push("补 " + ["short", "mid", "midlong", "long"].map((f, j) =>
+          ["短", "中", "中长", "长"][j] + " " + fmtInd(valueAt(bp[f], i), 0)).join("  "));
+      }
+    });
     if (!rows.length) return "";
     return '<div style="border-top:1px solid rgba(130,157,205,.2);margin-top:6px;padding-top:5px;font-family:monospace;font-size:9px;color:#9fb0cb;line-height:1.6">' +
       rows.map(esc).join("<br>") + "</div>";
@@ -690,7 +754,8 @@
     if (!el) return;
     const ind = state.indicator;
     const chunks = [];
-    if (state.ind && (ind.ma || ind.yw || ind.sub !== "none")) {
+    const subs = ind.subs || [];
+    if (state.ind && (ind.ma || ind.yw || subs.length)) {
       chunks.push('<span class="ind-strip-label">指标</span>');
       if (ind.ma) {
         ind.maPeriods.forEach((p, i) => {
@@ -704,25 +769,27 @@
         chunks.push('<span class="ind-strip-chip">白 <b>' + fmtInd(w) + "</b></span>");
         chunks.push('<span class="ind-strip-chip">黄 <b>' + fmtInd(y) + "</b></span>");
       }
-      if (ind.sub === "brick") {
-        const v = indValue(state.ind.brick);
-        const i = currentIndicatorIndex();
-        const pv = valueAt(state.ind.brick, i - 1);
-        const cls = v !== null && pv !== null && v >= pv ? "up" : v !== null && pv !== null ? "down" : "neutral";
-        chunks.push('<span class="ind-strip-sep"></span>');
-        chunks.push('<span class="ind-strip-chip ' + cls + '">砖 <b>' + fmtInd(v) + "</b></span>");
-      } else if (ind.sub === "kdj") {
-        chunks.push('<span class="ind-strip-sep"></span>');
-        chunks.push('<span class="ind-strip-chip">K <b>' + fmtInd(indValue(state.ind.k)) + "</b></span>");
-        chunks.push('<span class="ind-strip-chip">D <b>' + fmtInd(indValue(state.ind.d)) + "</b></span>");
-        chunks.push('<span class="ind-strip-chip">J <b>' + fmtInd(indValue(state.ind.j)) + "</b></span>");
-      } else if (ind.sub === "bupiao" && state.ind.bupiao) {
-        const bp = state.ind.bupiao;
-        chunks.push('<span class="ind-strip-sep"></span>');
-        [["短", bp.short], ["中", bp.mid], ["中长", bp.midlong], ["长", bp.long]].forEach((sp) => {
-          chunks.push('<span class="ind-strip-chip">' + sp[0] + " <b>" + fmtInd(indValue(sp[1]), 0) + "</b></span>");
-        });
-      }
+      subs.forEach((type) => {
+        if (type === "brick") {
+          const v = indValue(state.ind.brick);
+          const i = currentIndicatorIndex();
+          const pv = valueAt(state.ind.brick, i - 1);
+          const cls = v !== null && pv !== null && v >= pv ? "up" : v !== null && pv !== null ? "down" : "neutral";
+          chunks.push('<span class="ind-strip-sep"></span>');
+          chunks.push('<span class="ind-strip-chip ' + cls + '">砖 <b>' + fmtInd(v) + "</b></span>");
+        } else if (type === "kdj") {
+          chunks.push('<span class="ind-strip-sep"></span>');
+          chunks.push('<span class="ind-strip-chip">K <b>' + fmtInd(indValue(state.ind.k)) + "</b></span>");
+          chunks.push('<span class="ind-strip-chip">D <b>' + fmtInd(indValue(state.ind.d)) + "</b></span>");
+          chunks.push('<span class="ind-strip-chip">J <b>' + fmtInd(indValue(state.ind.j)) + "</b></span>");
+        } else if (type === "bupiao" && state.ind.bupiao) {
+          const bp = state.ind.bupiao;
+          chunks.push('<span class="ind-strip-sep"></span>');
+          [["短", bp.short], ["中", bp.mid], ["中长", bp.midlong], ["长", bp.long]].forEach((sp) => {
+            chunks.push('<span class="ind-strip-chip">' + sp[0] + " <b>" + fmtInd(indValue(sp[1]), 0) + "</b></span>");
+          });
+        }
+      });
     }
     if (chunks.length <= 1) { el.hidden = true; el.innerHTML = ""; return; }
     el.hidden = false;
@@ -750,20 +817,22 @@
         '<div class="ind-value-row"><span>白线</span><b>' + fmtInd(indValue(state.ind.white)) + "</b></div>" +
         '<div class="ind-value-row"><span>黄线</span><b>' + fmtInd(indValue(state.ind.yellow)) + "</b></div></div>");
     }
-    if (ind.sub === "brick") {
-      groups.push('<div class="ind-value-group"><h5>砖形图</h5>' +
-        '<div class="ind-value-row"><span>当前砖值</span><b>' + fmtInd(indValue(state.ind.brick)) + "</b></div></div>");
-    } else if (ind.sub === "kdj") {
-      groups.push('<div class="ind-value-group"><h5>KDJ(' + ind.kdj.n + "," + ind.kdj.m1 + "," + ind.kdj.m2 + ")</h5>" +
-        '<div class="ind-value-row"><span>K</span><b>' + fmtInd(indValue(state.ind.k)) + "</b></div>" +
-        '<div class="ind-value-row"><span>D</span><b>' + fmtInd(indValue(state.ind.d)) + "</b></div>" +
-        '<div class="ind-value-row"><span>J</span><b>' + fmtInd(indValue(state.ind.j)) + "</b></div></div>");
-    } else if (ind.sub === "bupiao" && state.ind.bupiao) {
-      const bp = state.ind.bupiao;
-      groups.push('<div class="ind-value-group"><h5>补票四线</h5>' +
-        [["短期", bp.short], ["中期", bp.mid], ["中长期", bp.midlong], ["长期", bp.long]].map((sp) =>
-          '<div class="ind-value-row"><span>' + sp[0] + "</span><b>" + fmtInd(indValue(sp[1]), 0) + "</b></div>").join("") + "</div>");
-    }
+    (ind.subs || []).forEach((type) => {
+      if (type === "brick") {
+        groups.push('<div class="ind-value-group"><h5>砖形图</h5>' +
+          '<div class="ind-value-row"><span>当前砖值</span><b>' + fmtInd(indValue(state.ind.brick)) + "</b></div></div>");
+      } else if (type === "kdj") {
+        groups.push('<div class="ind-value-group"><h5>KDJ(' + ind.kdj.n + "," + ind.kdj.m1 + "," + ind.kdj.m2 + ")</h5>" +
+          '<div class="ind-value-row"><span>K</span><b>' + fmtInd(indValue(state.ind.k)) + "</b></div>" +
+          '<div class="ind-value-row"><span>D</span><b>' + fmtInd(indValue(state.ind.d)) + "</b></div>" +
+          '<div class="ind-value-row"><span>J</span><b>' + fmtInd(indValue(state.ind.j)) + "</b></div></div>");
+      } else if (type === "bupiao" && state.ind.bupiao) {
+        const bp = state.ind.bupiao;
+        groups.push('<div class="ind-value-group"><h5>补票四线</h5>' +
+          [["短期", bp.short], ["中期", bp.mid], ["中长期", bp.midlong], ["长期", bp.long]].map((sp) =>
+            '<div class="ind-value-row"><span>' + sp[0] + "</span><b>" + fmtInd(indValue(sp[1]), 0) + "</b></div>").join("") + "</div>");
+      }
+    });
     el.innerHTML = groups.length ? groups.join("") : '<div class="ind-value-empty">主图和副图指标都未启用</div>';
   }
 
@@ -779,10 +848,11 @@
     const box = $("indParams");
     if (!box) return;
     const ind = state.indicator;
+    const active = (ind.subs || []).includes(ind.activeSub) ? ind.activeSub : (ind.subs || [])[0];
     let html = "";
-    if (ind.sub === "none") {
-      html = '<div class="ind-empty">未启用副图指标，可在上方选择砖形图 / KDJ / 补票四线</div>';
-    } else if (ind.sub === "brick") {
+    if (!active) {
+      html = '<div class="ind-empty">未添加副图指标。点上方按钮添加，最多 3 个指标；成交量始终显示。</div>';
+    } else if (active === "brick") {
       html = '<div class="ind-param-grid">' +
         intField("高低周期", "brick.range", ind.brick.range, 2, 30) +
         intField("平滑1", "brick.smooth1", ind.brick.smooth1, 1, 30) +
@@ -790,7 +860,7 @@
         intField("二次平滑", "brick.smooth3", ind.brick.smooth3, 1, 30) +
         intField("显示阈值", "brick.threshold", ind.brick.threshold, 0, 100, 0.1) +
         "</div>";
-    } else if (ind.sub === "kdj") {
+    } else if (active === "kdj") {
       html = '<div class="ind-param-grid">' +
         intField("周期 N", "kdj.n", ind.kdj.n, 2, 60) +
         intField("平滑 M1", "kdj.m1", ind.kdj.m1, 1, 20) +
@@ -810,6 +880,20 @@
     box.innerHTML = html;
   }
 
+  function renderSubTabs() {
+    const ind = state.indicator;
+    const types = [["brick", "砖形图"], ["kdj", "KDJ"], ["bupiao", "补票四线"]];
+    $("subTabs").innerHTML = types.map(([key, label]) => {
+      const on = (ind.subs || []).includes(key);
+      return '<button type="button" data-sub="' + key + '" class="' +
+        (on ? "active" : "") + (ind.activeSub === key ? " editing" : "") + '">' +
+        label + (on ? '<i class="sub-remove" data-remove="' + key + '" title="移除这个副图">×</i>' : "") +
+        "</button>";
+    }).join("");
+    const n = (ind.subs || []).length;
+    $("subCountHint").textContent = "成交量 + " + n + " 个指标（共 " + (n + 1) + " 个副图）";
+  }
+
   function syncIndicatorControls() {
     const ind = state.indicator;
     if (!$("indMA")) return;
@@ -819,9 +903,7 @@
     $("indEma1").value = ind.ema[0];
     $("indEma2").value = ind.ema[1];
     ind.yellowPeriods.forEach((v, i) => { $("indYellow" + i).value = v; });
-    document.querySelectorAll("#subTabs button").forEach((b) => {
-      b.classList.toggle("active", b.dataset.sub === ind.sub);
-    });
+    renderSubTabs();
     $("maParams").classList.toggle("disabled", !ind.ma);
     $("ywParams").classList.toggle("disabled", !ind.yw);
     document.querySelectorAll("#maParams input").forEach((x) => { x.disabled = !ind.ma; });
@@ -842,8 +924,22 @@
     if (btn) btn.classList.remove("active");
   }
 
-  function setSubIndicator(sub) {
-    state.indicator.sub = ["none", "brick", "kdj", "bupiao"].includes(sub) ? sub : "none";
+  function setSubIndicator(sub, remove) {
+    const ind = state.indicator;
+    if (!["brick", "kdj", "bupiao"].includes(sub)) return;
+    if (remove) {
+      ind.subs = (ind.subs || []).filter((x) => x !== sub);
+      if (ind.activeSub === sub) ind.activeSub = ind.subs[0] || "";
+    } else if ((ind.subs || []).includes(sub)) {
+      ind.activeSub = sub;
+    } else {
+      if ((ind.subs || []).length >= 3) {
+        toast("副图最多 3 个指标（加成交量共 4 个）", "error");
+        return;
+      }
+      ind.subs = (ind.subs || []).concat(sub);
+      ind.activeSub = sub;
+    }
     saveIndicator();
     syncIndicatorControls();
     renderTrainChart();
@@ -915,8 +1011,10 @@
       });
     });
     $("subTabs").addEventListener("click", (e) => {
+      const rm = e.target.closest("[data-remove]");
+      if (rm) { setSubIndicator(rm.dataset.remove, true); return; }
       const b = e.target.closest("button[data-sub]");
-      if (b) setSubIndicator(b.dataset.sub);
+      if (b) setSubIndicator(b.dataset.sub, false);
     });
     $("indParams").addEventListener("input", (e) => {
       const input = e.target.closest("input[data-param]");
@@ -1345,8 +1443,13 @@
           '<span class="hm-name">' + esc(m.name) + '</span>' +
           '<span class="hm-bar"><i style="width:' + Math.min(100, m.score) + '%"></i></span>' +
           '<span class="hm-score">' + m.score.toFixed(0) + "</span></div>" +
-          '<div class="hint-evidence">' + esc((m.evidence || []).slice(0, 2).join("；")) + "</div></div></div>"
+          '<div class="hint-evidence">' + esc((m.evidence || []).slice(0, 2).join("；")) + "</div></div>" +
+          '<button class="hm-learn" type="button" data-pattern-key="' + esc(m.key || "") + '">书中解释 →</button></div>'
         ).join("") + "</div>";
+      box.onclick = (e) => {
+        const btn = e.target.closest("[data-pattern-key]");
+        if (btn && window.KPattern) window.KPattern.openByKey(btn.dataset.patternKey);
+      };
     } catch (err) {
       box.innerHTML = '<div class="hint-meta">分析失败：' + esc(err.message) + "</div>";
     }
@@ -1434,12 +1537,14 @@
     const allTrades = sessions.reduce((a, s) => a + (s.trades || 0), 0);
     const allWins = sessions.reduce((a, s) => a + (s.wins || 0), 0);
     const avgRet = total ? sessions.reduce((a, s) => a + s.returnPct, 0) / total : null;
+    const cumRet = cumulativeReturn(sessions);
     const gp = sessions.reduce((a, s) => a + Math.max(0, s.returnPct), 0);
     const gl = Math.abs(sessions.reduce((a, s) => a + Math.min(0, s.returnPct), 0));
     const avgDD = total ? sessions.reduce((a, s) => a + s.maxDD, 0) / total : null;
 
     const cards = [
       ["累计训练", total ? total + " 局" : "--", "", "从第一局开始积累"],
+      ["累计收益率", cumRet === null ? "--" : fmtPct(cumRet), pctClass(cumRet), "按每局收益率复利"],
       ["累计交易", allTrades ? allTrades + " 笔" : "--", "", "已完成买卖"],
       ["综合胜率", allTrades ? (allWins / allTrades * 100).toFixed(1) + "%" : "--", "", "按已平仓交易"],
       ["平均收益率", avgRet === null ? "--" : fmtPct(avgRet), avgRet > 0 ? "up" : avgRet < 0 ? "down" : "", "每局平均"],
@@ -1463,7 +1568,7 @@
       state.statsChart.setOption({
         animation: false,
         graphic: [{ type: "text", left: "center", top: "middle",
-          style: { text: "还没有训练记录\n完成一局后这里会出现净值曲线", fill: "#9aa4b8", fontSize: 12, lineHeight: 20, textAlign: "center" } }],
+          style: { text: "还没有训练记录\n完成一局后这里会出现净值曲线", fill: "#9aa4b8", fontSize: 13, lineHeight: 20, textAlign: "center" } }],
         xAxis: { show: false }, yAxis: { show: false }, series: [],
       }, true);
       return;
@@ -1485,18 +1590,18 @@
       grid: { left: 12, right: 20, top: 22, bottom: 24, containLabel: true },
       tooltip: {
         trigger: "axis", backgroundColor: "rgba(17,26,46,.95)", borderWidth: 0,
-        textStyle: { color: "#e7edf8", fontSize: 11 },
+        textStyle: { color: "#e7edf8", fontSize: 12 },
         formatter: (p) => p[0].axisValue + "<br/><b>¥" + Number(p[0].value).toLocaleString("zh-CN") + "</b>",
       },
       xAxis: {
         type: "category", data: labels, boundaryGap: false,
         axisLine: { lineStyle: { color: "#e3e8f1" } }, axisTick: { show: false },
-        axisLabel: { color: "#9aa4b8", fontSize: 9, interval: Math.max(0, Math.ceil(labels.length / 8) - 1) },
+        axisLabel: { color: "#9aa4b8", fontSize: 11, interval: Math.max(0, Math.ceil(labels.length / 8) - 1) },
       },
       yAxis: {
         type: "value", scale: true,
         axisLine: { show: false }, axisTick: { show: false },
-        axisLabel: { color: "#9aa4b8", fontSize: 9, formatter: (v) => "¥" + Math.round(v).toLocaleString("zh-CN") },
+        axisLabel: { color: "#9aa4b8", fontSize: 11, formatter: (v) => "¥" + Math.round(v).toLocaleString("zh-CN") },
         splitLine: { lineStyle: { color: "#eef1f7", type: "dashed" } },
       },
       series: [{
@@ -1573,6 +1678,181 @@
       "</tr></thead><tbody>" + rows + "</tbody></table>";
   }
 
+  function drawRoundRect(ctx, x, y, w, h, r) {
+    const rr = Math.min(r, w / 2, h / 2);
+    ctx.beginPath();
+    ctx.moveTo(x + rr, y);
+    ctx.arcTo(x + w, y, x + w, y + h, rr);
+    ctx.arcTo(x + w, y + h, x, y + h, rr);
+    ctx.arcTo(x, y + h, x, y, rr);
+    ctx.arcTo(x, y, x + w, y, rr);
+    ctx.closePath();
+  }
+
+  function generateSummaryImage() {
+    const sessions = state.stats.sessions || [];
+    if (!sessions.length) { toast("还没有训练数据，先完成一局再生成"); return; }
+    const W = 1200, H = 1600;
+    const canvas = document.createElement("canvas");
+    canvas.width = W;
+    canvas.height = H;
+    const ctx = canvas.getContext("2d");
+    const font = '"Microsoft YaHei","PingFang SC","Noto Sans SC",sans-serif';
+    const ink = "#111a2e", muted = "#6d7890", faint = "#9aa4b8", line = "#e6ebf3";
+    const blue = "#2f6bff", red = "#c94a4a", green = "#2f9a67";
+    const cum = cumulativeReturn(sessions) || 0;
+    const total = sessions.length;
+    const trades = sessions.reduce((a, s) => a + (s.trades || 0), 0);
+    const wins = sessions.reduce((a, s) => a + (s.wins || 0), 0);
+    const winRate = trades ? wins / trades * 100 : null;
+    const avg = sessions.reduce((a, s) => a + (Number(s.returnPct) || 0), 0) / total;
+    const gp = sessions.reduce((a, s) => a + Math.max(0, Number(s.returnPct) || 0), 0);
+    const gl = Math.abs(sessions.reduce((a, s) => a + Math.min(0, Number(s.returnPct) || 0), 0));
+    const pf = gl ? gp / gl : (gp ? Infinity : 0);
+    const avgDD = sessions.reduce((a, s) => a + (Number(s.maxDD) || 0), 0) / total;
+
+    // 背景
+    const bg = ctx.createLinearGradient(0, 0, W, H);
+    bg.addColorStop(0, "#f7f9fe");
+    bg.addColorStop(1, "#eef3fb");
+    ctx.fillStyle = bg;
+    ctx.fillRect(0, 0, W, H);
+
+    // 顶部
+    ctx.fillStyle = "#0f172a";
+    ctx.fillRect(0, 0, W, 250);
+    const glow = ctx.createRadialGradient(950, 20, 10, 950, 20, 360);
+    glow.addColorStop(0, "rgba(47,107,255,.42)");
+    glow.addColorStop(1, "rgba(47,107,255,0)");
+    ctx.fillStyle = glow;
+    ctx.fillRect(0, 0, W, 280);
+    ctx.fillStyle = "#8fb1ff";
+    ctx.font = "700 22px " + font;
+    ctx.fillText("K-LINE TRAINING · DATA REVIEW", 64, 64);
+    ctx.fillStyle = "#f3f7ff";
+    ctx.font = "800 54px " + font;
+    ctx.fillText("K线训练数据总结", 64, 136);
+    ctx.fillStyle = "#9fb0cb";
+    ctx.font = "400 20px " + font;
+    ctx.fillText(new Date().toLocaleString("zh-CN"), 64, 178);
+    ctx.textAlign = "right";
+    ctx.fillStyle = "#ffd166";
+    ctx.font = "800 58px " + font;
+    ctx.fillText((cum >= 0 ? "+" : "") + cum.toFixed(2) + "%", W - 64, 132);
+    ctx.fillStyle = "#9fb0cb";
+    ctx.font = "400 19px " + font;
+    ctx.fillText("累计收益率", W - 64, 168);
+    ctx.textAlign = "left";
+
+    // 数据卡片
+    const cards = [
+      ["累计训练", total + " 局", "全部完成的训练局数", ink],
+      ["综合胜率", winRate === null ? "--" : winRate.toFixed(1) + "%", "按已平仓交易", ink],
+      ["平均收益率", fmtPct(avg), "每局平均收益", avg >= 0 ? red : green],
+      ["收益盈亏比", pf === Infinity ? "∞" : pf.toFixed(2), "盈利局 / 亏损局", ink],
+      ["平均最大回撤", avgDD.toFixed(2) + "%", "风险控制参考", ink],
+      ["累计交易", trades + " 笔", "已完成买卖", ink],
+    ];
+    const cw = 350, ch = 132, gap = 25, sx = 50, sy = 292;
+    cards.forEach((c, i) => {
+      const x = sx + (i % 3) * (cw + gap);
+      const y = sy + Math.floor(i / 3) * (ch + gap);
+      ctx.fillStyle = "#fff";
+      drawRoundRect(ctx, x, y, cw, ch, 16);
+      ctx.fill();
+      ctx.strokeStyle = line; ctx.lineWidth = 1; ctx.stroke();
+      ctx.fillStyle = muted; ctx.font = "500 18px " + font;
+      ctx.fillText(c[0], x + 22, y + 36);
+      ctx.fillStyle = c[3]; ctx.font = "800 34px " + font;
+      ctx.fillText(c[1], x + 22, y + 82);
+      ctx.fillStyle = faint; ctx.font = "400 15px " + font;
+      ctx.fillText(c[2], x + 22, y + 110);
+    });
+
+    // 收益曲线
+    const chartX = 50, chartY = 650, chartW = W - 100, chartH = 330;
+    ctx.fillStyle = "#fff";
+    drawRoundRect(ctx, chartX, chartY, chartW, chartH, 16);
+    ctx.fill();
+    ctx.strokeStyle = line; ctx.stroke();
+    ctx.fillStyle = ink; ctx.font = "700 20px " + font;
+    ctx.fillText("累计收益曲线", chartX + 24, chartY + 38);
+    const asc = sessions.slice().reverse();
+    let factor = 1;
+    const vals = [1];
+    asc.forEach((s) => { factor *= 1 + (Number(s.returnPct) || 0) / 100; vals.push(factor); });
+    const plotX = chartX + 44, plotY = chartY + 64, plotW = chartW - 76, plotH = chartH - 100;
+    const mn = Math.min(...vals, 1), mx = Math.max(...vals, 1);
+    const span = Math.max(0.01, mx - mn);
+    const px = (i) => plotX + (vals.length <= 1 ? 0 : i / (vals.length - 1) * plotW);
+    const py = (v) => plotY + plotH - (v - mn) / span * plotH;
+    ctx.strokeStyle = "#edf1f8"; ctx.lineWidth = 1;
+    for (let i = 0; i <= 4; i++) {
+      const y = plotY + plotH * i / 4;
+      ctx.beginPath(); ctx.moveTo(plotX, y); ctx.lineTo(plotX + plotW, y); ctx.stroke();
+    }
+    const baseY = py(1);
+    ctx.strokeStyle = "rgba(47,107,255,.35)"; ctx.setLineDash([5, 5]);
+    ctx.beginPath(); ctx.moveTo(plotX, baseY); ctx.lineTo(plotX + plotW, baseY); ctx.stroke();
+    ctx.setLineDash([]);
+    ctx.beginPath();
+    vals.forEach((v, i) => { i ? ctx.lineTo(px(i), py(v)) : ctx.moveTo(px(i), py(v)); });
+    ctx.strokeStyle = blue; ctx.lineWidth = 4; ctx.lineJoin = "round"; ctx.lineCap = "round"; ctx.stroke();
+    ctx.fillStyle = faint; ctx.font = "400 14px " + font;
+    ctx.fillText("初始", plotX, chartY + chartH - 18);
+    ctx.textAlign = "right";
+    ctx.fillText((cum >= 0 ? "+" : "") + cum.toFixed(2) + "%", plotX + plotW, chartY + chartH - 18);
+    ctx.textAlign = "left";
+
+    // 最近记录
+    const tableX = 50, tableY = 1015, tableW = W - 100;
+    ctx.fillStyle = "#fff";
+    drawRoundRect(ctx, tableX, tableY, tableW, 450, 16);
+    ctx.fill();
+    ctx.strokeStyle = line; ctx.stroke();
+    ctx.fillStyle = ink; ctx.font = "700 20px " + font;
+    ctx.fillText("最近训练", tableX + 24, tableY + 38);
+    ctx.fillStyle = faint; ctx.font = "400 15px " + font;
+    ctx.fillText("按时间从新到旧", tableX + 130, tableY + 38);
+    const cols = [tableX + 26, tableX + 170, tableX + 400, tableX + 650, tableX + 870];
+    ctx.fillStyle = muted; ctx.font = "600 15px " + font;
+    ["日期", "周期", "收益率", "胜率", "交易"].forEach((t, i) => ctx.fillText(t, cols[i], tableY + 80));
+    ctx.strokeStyle = line;
+    ctx.beginPath(); ctx.moveTo(tableX + 24, tableY + 96); ctx.lineTo(tableX + tableW - 24, tableY + 96); ctx.stroke();
+    sessions.slice(0, 6).forEach((s, i) => {
+      const y = tableY + 132 + i * 50;
+      ctx.fillStyle = i % 2 ? "#fafbfd" : "#fff";
+      ctx.fillRect(tableX + 20, y - 24, tableW - 40, 42);
+      ctx.fillStyle = ink; ctx.font = "500 18px " + font;
+      ctx.fillText(new Date(s.ts).toLocaleDateString("zh-CN"), cols[0], y);
+      ctx.fillText(PERIOD_LABEL[s.period] || s.period || "--", cols[1], y);
+      ctx.fillStyle = s.returnPct >= 0 ? red : green;
+      ctx.font = "700 18px " + font;
+      ctx.fillText((s.returnPct >= 0 ? "+" : "") + Number(s.returnPct).toFixed(2) + "%", cols[2], y);
+      ctx.fillStyle = ink; ctx.font = "500 18px " + font;
+      ctx.fillText((s.winRate || 0).toFixed(0) + "%", cols[3], y);
+      ctx.fillText(String(s.trades || 0), cols[4], y);
+    });
+
+    ctx.fillStyle = faint; ctx.font = "400 15px " + font;
+    ctx.fillText("K线训练营 · 数据来自本机训练记录 · 仅供复盘参考", 50, 1535);
+
+    canvas.toBlob((blob) => {
+      if (!blob) { toast("图片生成失败"); return; }
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      const now = new Date();
+      const stamp = now.getFullYear() + String(now.getMonth() + 1).padStart(2, "0") + String(now.getDate()).padStart(2, "0");
+      a.download = "K线训练总结_" + stamp + ".png";
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+      setTimeout(() => URL.revokeObjectURL(url), 1500);
+      toast("训练数据总结图已生成");
+    }, "image/png");
+  }
+
   function exportStats() {
     const sessions = state.stats.sessions || [];
     if (!sessions.length) { toast("还没有可以导出的记录"); return; }
@@ -1596,12 +1876,12 @@
 
   function resetStats() {
     if (!state.stats.sessions.length && !state.stats.quiz.total) { toast("没有需要清空的记录"); return; }
-    if (!confirm("确定清空全部训练记录和形态测验成绩吗？此操作不可恢复。")) return;
+    if (!confirm("确定清空全部训练数据吗？训练记录、形态测验成绩都会删除，此操作不可恢复。")) return;
     state.stats = defaultStats();
     saveStats();
-    renderStats();
     refreshHero();
-    toast("记录已清空");
+    if (state.view === "stats") renderStats();
+    toast("训练数据已清空");
   }
 
   /* ---------------------------------------------------------------
@@ -1613,11 +1893,14 @@
     refreshHero();
     $("btnExportStats").addEventListener("click", exportStats);
     $("btnResetStats").addEventListener("click", resetStats);
+    $("btnClearTrain").addEventListener("click", resetStats);
+    $("btnSummaryImage").addEventListener("click", generateSummaryImage);
+    $("btnExportImage").addEventListener("click", generateSummaryImage);
     document.querySelectorAll("#mainNav button").forEach((b) => {
       b.addEventListener("click", () => switchView(b.dataset.view));
     });
     const hash = (location.hash || "").replace("#", "").split("/")[0];
-    if (["stats", "pattern"].includes(hash)) switchView(hash, false);
+    if (["stats", "pattern", "book"].includes(hash)) switchView(hash, false);
     startSession();
     if (window.KPattern) window.KPattern.activate();
   }

@@ -21,6 +21,7 @@
       <button class="active" data-view="train">训练场</button>
       <button data-view="stats">数据统计</button>
       <button data-view="pattern">形态分析</button>
+      <button data-view="book">电子书</button>
     </nav>
     <div class="tr-topright">
       <span class="tr-data-pill"><i class="live-dot"></i><span id="dataPillText">历史数据就绪</span></span>
@@ -40,6 +41,7 @@
         <div class="hero-stat"><b id="heroToday">0</b><span>今日训练</span></div>
         <div class="hero-stat"><b id="heroSessions">0</b><span>累计局数</span></div>
         <div class="hero-stat accent"><b id="heroWinRate">--</b><span>交易胜率</span></div>
+        <div class="hero-stat" id="heroReturnCard"><b id="heroReturn">--</b><span>累计收益率</span></div>
       </div>
     </section>
 
@@ -182,6 +184,26 @@
             <div><small>最大回撤</small><b id="liveDD">0.00%</b></div>
           </div>
         </section>
+
+        <section class="panel-card train-data-card">
+          <div class="panel-title">
+            <span>累计训练数据</span>
+            <span class="tiny-tag soft" id="trainDataCount">0 局</span>
+          </div>
+          <div class="train-data-return">
+            <small>累计收益率</small>
+            <b id="trainCumRet">--</b>
+            <span id="trainCumAvg">平均 -- / 局</span>
+          </div>
+          <div class="train-data-mini">
+            <div><small>综合胜率</small><b id="trainDataWin">--</b></div>
+            <div><small>盈亏比</small><b id="trainDataPF">--</b></div>
+          </div>
+          <div class="train-data-actions">
+            <button class="btn-line" id="btnSummaryImage" type="button">生成总结图</button>
+            <button class="btn-line danger" id="btnClearTrain" type="button">清空训练数据</button>
+          </div>
+        </section>
       </aside>
     </div>
 
@@ -215,8 +237,9 @@
         <p>每一局的结果都会被记录，看看自己的胜率、盈亏比和成长曲线。</p>
       </div>
       <div class="head-actions">
+        <button class="btn-line" id="btnExportImage" type="button">生成总结图</button>
         <button class="btn-line" id="btnExportStats" type="button">导出 CSV</button>
-        <button class="btn-line danger" id="btnResetStats" type="button">清空记录</button>
+        <button class="btn-line danger" id="btnResetStats" type="button">清空训练数据</button>
       </div>
     </section>
 
@@ -252,6 +275,7 @@
         <button data-tab="atlas" class="active">形态图鉴</button>
         <button data-tab="quiz">形态测验</button>
         <button data-tab="shot">截图分析</button>
+        <button data-tab="shape">手绘选股</button>
       </div>
     </section>
 
@@ -259,7 +283,7 @@
       <div class="murphy-mark">墨</div>
       <div class="murphy-copy">
         <b>形态识别标准：约翰·墨菲《期货市场技术分析》</b>
-        <p>第4章 趋势与缺口 · 第5章 反转形态 · 第6章 持续形态 · 第12章 日本蜡烛图</p>
+        <p>第4章 趋势与缺口 · 第5章 主要反转形态 · 第6章 持续形态（1994 中文版）</p>
       </div>
       <button class="mini-btn" id="btnMurphyNotes" type="button">查看书中体系 →</button>
     </section>
@@ -275,10 +299,7 @@
           <button data-filter="all" class="active">全部</button>
           <button data-filter="反转形态">反转形态</button>
           <button data-filter="持续形态">持续形态</button>
-          <button data-filter="单K反转">单K反转</button>
-          <button data-filter="组合反转">组合反转</button>
-          <button data-filter="组合持续">组合持续</button>
-          <button data-filter="缺口反转">缺口反转</button>
+          <button data-filter="缺口反转">缺口形态</button>
         </div>
       </div>
       <div class="atlas-grid" id="atlasGrid"></div>
@@ -329,7 +350,7 @@
             <ol class="how-list">
               <li><b>先看结构</b><span>高低点是在抬高、降低，还是走平？</span></li>
               <li><b>再看位置</b><span>形态出现在上涨末端、下跌末端，还是趋势中继？</span></li>
-              <li><b>最后看确认</b><span>有没有突破、吞没或长影线？不要只凭单根K线。</span></li>
+              <li><b>最后看确认</b><span>有没有收盘突破边界、回抽确认和量能配合？不要只凭盘中刺穿。</span></li>
             </ol>
             <div class="quiz-period-row">
               <span>出题周期</span>
@@ -415,7 +436,121 @@
         </section>
       </div>
     </section>
+
+    <!-- 手绘选股 -->
+    <section class="pattern-pane" id="pane-shape" hidden>
+      <div class="shape-layout">
+        <section class="panel-card shape-draw-card">
+          <div class="shape-head">
+            <div>
+              <div class="pattern-cat">HAND-DRAWN PATTERN</div>
+              <h2>画一段走势，找最近出现过的股票</h2>
+              <p>只扫描最近 N 个交易日内结束的形态，不是翻多年前的老图。画得越像，匹配度越高。</p>
+            </div>
+            <span class="shape-badge">本地日线 · 最近出现</span>
+          </div>
+          <div class="shape-canvas-wrap">
+            <canvas id="shapeCanvas"></canvas>
+            <div class="shape-canvas-hint" id="shapeCanvasHint">按住鼠标或手指，画一条走势线</div>
+          </div>
+          <div class="shape-actions">
+            <div class="shape-lookback">
+              <span>形态结束于最近</span>
+              <div class="seg-choice small" id="shapeLookback">
+                <button data-days="5" type="button">5天</button>
+                <button data-days="10" class="active" type="button">10天</button>
+                <button data-days="20" type="button">20天</button>
+                <button data-days="30" type="button">30天</button>
+              </div>
+            </div>
+            <div class="shape-action-btns">
+              <button class="mini-btn" id="shapeClear" type="button">清除重画</button>
+              <button class="btn-fill" id="shapeScan" type="button">扫描相似股票</button>
+            </div>
+          </div>
+          <div class="shape-tip">画的是<b>相对走势</b>：上涨、下跌、W底、圆弧、横盘都可以；系统会忽略价格高低，只比较形态和方向。</div>
+        </section>
+        <aside class="panel-card shape-results-card">
+          <div class="panel-title">
+            <span>最近匹配</span>
+            <span class="tiny-tag soft" id="shapeStatus">等待画线</span>
+          </div>
+          <div class="shape-results" id="shapeResults">
+            <div class="shape-empty">
+              <div class="result-empty-icon">✎</div>
+              <b>画一条走势线</b>
+              <p>点击「扫描相似股票」后，会按“形态结束日离现在多近 + 形态相似度”排序，显示最近出现过的股票。</p>
+            </div>
+          </div>
+        </aside>
+      </div>
+    </section>
   </main>
+
+    <!-- 电子书 -->
+    <main class="tr-view" id="view-book" hidden>
+      <section class="book-hero">
+        <div>
+          <div class="tr-eyebrow">BOOK READER</div>
+          <h1>期货市场技术分析</h1>
+          <p>约翰·墨菲 著 · 丁圣元 译 · 1994 中文版。按章节和小标题阅读，支持翻页、缩放和目录跳转。</p>
+        </div>
+        <div class="book-hero-stat">
+          <b id="bookPageNow">--</b>
+          <span>当前页 / <span id="bookPageTotal">--</span></span>
+        </div>
+      </section>
+      <div class="book-layout">
+        <aside class="book-side">
+          <div class="book-side-head">
+            <b>目录</b>
+            <span class="tiny-tag soft" id="bookOutlineCount">--</span>
+          </div>
+          <input class="book-search" id="bookSearch" type="search" placeholder="搜索章节 / 小标题">
+          <nav class="book-outline" id="bookOutline"></nav>
+        </aside>
+        <section class="book-reader">
+          <div class="book-toolbar">
+            <div class="book-toolbar-left">
+              <button class="mini-btn" id="bookPrev" type="button">← 上一页</button>
+              <button class="mini-btn" id="bookNext" type="button">下一页 →</button>
+            </div>
+            <div class="book-location">
+              <b id="bookChapterLabel">--</b>
+              <span id="bookSectionLabel"></span>
+            </div>
+            <div class="book-toolbar-right">
+              <button class="mini-btn" id="bookZoomOut" type="button">−</button>
+              <span class="book-zoom" id="bookZoomLabel">100%</span>
+              <button class="mini-btn" id="bookZoomIn" type="button">+</button>
+              <button class="mini-btn" id="bookFit" type="button">适合宽度</button>
+            </div>
+          </div>
+          <div class="book-paper-wrap">
+            <article class="book-paper" id="bookPaper">
+              <header class="book-page-head">
+                <div class="book-page-kicker" id="bookPageKicker">BOOK PAGE</div>
+                <h2 id="bookPageTitle">正在加载目录…</h2>
+                <p id="bookPageSub"></p>
+              </header>
+              <div class="book-page-image-wrap">
+                <img id="bookPageImage" alt="电子书页面" draggable="false">
+                <div class="book-page-loading" id="bookPageLoading">正在加载页面…</div>
+              </div>
+            </article>
+          </div>
+          <div class="book-footer">
+            <div class="book-page-jump">
+              <span>跳到</span>
+              <input id="bookPageInput" type="number" min="1" value="1">
+              <span>/ <span id="bookPageTotal2">--</span> 页</span>
+              <button class="mini-btn" id="bookJump" type="button">跳转</button>
+            </div>
+            <span class="book-key-hint">← → 翻页 · + − 缩放</span>
+          </div>
+        </section>
+      </div>
+    </main>
 
   <footer class="tr-footer">
     <span>K线训练营 · 数据来自通达信本地历史 / 腾讯历史行情</span>
@@ -438,6 +573,11 @@
       <canvas id="modalThumb" width="420" height="190"></canvas>
     </div>
     <p class="pattern-modal-desc" id="modalDesc"></p>
+    <blockquote class="book-quote" id="modalQuote">
+      <span class="quote-label">书中要点摘录 / 整理</span>
+      <span id="modalQuoteText"></span>
+      <cite id="modalQuoteSource"></cite>
+    </blockquote>
     <div class="pattern-modal-grid">
       <div><h4>识别要点</h4><ul id="modalPoints"></ul></div>
       <div><h4>参考买点 / 卖点</h4><p id="modalEntry"></p><h4>形态失效</h4><p id="modalInvalid"></p></div>
@@ -447,7 +587,34 @@
         <h4>量能确认</h4><p id="modalVolume"></p>
       </div>
     </div>
+    <section class="case-section">
+      <div class="case-section-head">
+        <div>
+          <h4>历史案例</h4>
+          <p>从本地日线历史中扫描，虚线为形态完成点，右侧是之后 30 根K线。</p>
+        </div>
+        <span class="case-status" id="caseStatus"></span>
+      </div>
+      <div class="case-grid" id="caseGrid"></div>
+      <div class="case-empty" id="caseEmpty" hidden></div>
+    </section>
     <div class="modal-note">按《期货市场技术分析》（约翰·墨菲）整理。形态识别是概率工具，必须结合趋势、量能和失效条件。</div>
+  </div>
+</div>
+
+<!-- 历史案例大图 -->
+<div class="tr-modal" id="caseModal" hidden>
+  <div class="tr-modal-mask" data-close="1"></div>
+  <div class="case-modal-card">
+    <button class="modal-x" id="btnCloseCase" type="button">×</button>
+    <div class="case-modal-head">
+      <div class="pattern-cat">HISTORICAL CASE</div>
+      <h2 id="caseTitle">历史案例</h2>
+      <p id="caseMeta"></p>
+    </div>
+    <div class="case-chart" id="caseChart"></div>
+    <div class="case-facts" id="caseFacts"></div>
+    <div class="modal-note">历史案例只用于学习形态结构与后续演变，不代表未来涨跌。</div>
   </div>
 </div>
 
@@ -459,7 +626,7 @@
     <div class="murphy-modal-head">
       <div class="pattern-cat">JOHN J. MURPHY · TECHNICAL ANALYSIS</div>
       <h2>墨菲形态体系</h2>
-      <p>按《期货市场技术分析》章节整理的识别框架；不是原书替代，而是本工具的规则说明。</p>
+      <p>以 1994 年中文版《期货市场技术分析》第4—6章为准。本书没有日本蜡烛图章节，因此不收录十字星、吞没等K线定义。</p>
     </div>
     <div class="murphy-chapter-grid">
       <section>
@@ -477,25 +644,18 @@
           <li>头肩顶/底、三重顶/底、双顶/底</li>
           <li>圆弧顶/底、V形反转</li>
           <li>必须有前置趋势，跌破/突破颈线才确认</li>
+          <li>可用3%穿越或两日原则过滤假突破</li>
           <li>用形态高度测算目标，跌破形态低点失效</li>
         </ul>
       </section>
       <section>
         <h4>第6章 · 持续形态</h4>
         <ul>
-          <li>对称/上升/下降三角形</li>
+          <li>对称/上升/下降三角形，扩大形态，钻石形态</li>
           <li>旗形、三角旗、矩形、上升/下降楔形</li>
+          <li>持续型头肩形、等距运动</li>
           <li>整理期通常缩量，突破时需放量</li>
           <li>用旗杆或形态最宽处测算目标</li>
-        </ul>
-      </section>
-      <section>
-        <h4>第12章 · 日本蜡烛图</h4>
-        <ul>
-          <li>十字星、刺透、乌云盖顶</li>
-          <li>早晨之星、黄昏之星</li>
-          <li>上升三法、下降三法</li>
-          <li>蜡烛图信号必须由后续K线和量能确认</li>
         </ul>
       </section>
     </div>
@@ -504,7 +664,7 @@
       <span>① 前置趋势</span><span>② 形态边界</span><span>③ 颈线/趋势线突破</span><span>④ 量能</span><span>⑤ 测算目标</span><span>⑥ 失效条件</span>
     </div>
     <p class="murphy-source">
-      学习摘要参考：约翰·墨菲《期货市场技术分析》（丁圣元译）章节结构；正版电子书可在微信读书阅读。
+      学习摘要以《期货市场技术分析》（1994 中文版，丁圣元译）第4—6章为准。
       本工具只实现可量化的形态规则，不复制原书正文。
     </p>
   </div>
@@ -542,13 +702,13 @@
     </section>
 
     <section class="ind-section">
-      <div class="ind-section-title">副图指标</div>
+      <div class="ind-section-title">副图指标 <span id="subCountHint" class="ind-sub-count">成交量 + 2 个</span></div>
       <div class="ind-tabs" id="subTabs">
-        <button type="button" data-sub="none">无</button>
         <button type="button" data-sub="brick">砖形图</button>
         <button type="button" data-sub="kdj">KDJ</button>
         <button type="button" data-sub="bupiao">补票四线</button>
       </div>
+      <div class="ind-sub-help">点按钮添加副图，再点一次移除；最多 3 个指标 + 成交量 = 4 个副图。</div>
       <div id="indParams" class="ind-params"></div>
     </section>
 
@@ -568,5 +728,6 @@
 <script src="/echarts.min.js"></script>
 <script src="/training.js"></script>
 <script src="/pattern-lab.js"></script>
+<script src="/book.js"></script>
 </body>
 </html>

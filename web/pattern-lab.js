@@ -13,6 +13,8 @@
     loaded: false,
     loading: false,
     quiz: { period: "day", data: null, answered: false, loading: false, chart: null, zoomChart: null, number: 0 },
+    cases: {}, caseChart: null, caseData: [], caseKey: null,
+    shape: { lookback: 10, points: [], drawing: false, results: [], scanning: false, seeded: false },
     shot: {
       images: [], activeId: null, mode: "cn", chart: null,
       drag: null, display: null,
@@ -109,20 +111,47 @@
       case "rectangle":
         points = [[0, .98], [.16, 1.04], [.32, .975], [.48, 1.045], [.64, .98], [.8, 1.04], [1, 1.075]];
         break;
-      case "cup_handle":
-        points = [[0, 1.06], [.15, 1.015], [.35, .92], [.5, .905], [.66, .965], [.78, 1.045], [.87, 1.005], [1, 1.14]];
-        break;
       case "rounding_bottom":
         points = [[0, 1.06], [.16, .99], [.34, .93], [.5, .915], [.66, .94], [.82, 1.0], [1, 1.1]];
         break;
-      case "breakout":
-        points = [[0, .98], [.25, .985], [.5, .975], [.7, .99], [.82, .98], [.9, 1.05], [1, 1.15]];
+      case "rounding_top":
+        points = [[0, .94], [.16, 1.01], [.34, 1.07], [.5, 1.085], [.66, 1.06], [.82, 1.0], [1, .9]];
+        break;
+      case "triple_bottom":
+        points = [[0, 1.08], [.12, .96], [.22, 1.01], [.36, .955], [.48, 1.015], [.62, .96], [.76, 1.04], [.9, 1.06], [1, 1.15]];
+        break;
+      case "triple_top":
+        points = [[0, .92], [.12, 1.04], [.22, .99], [.36, 1.045], [.48, .985], [.62, 1.04], [.76, .96], [.9, .94], [1, .85]];
+        break;
+      case "bull_pennant":
+        points = [[0, .88], [.18, .9], [.4, 1.13], [.52, 1.08], [.62, 1.1], [.72, 1.07], [.82, 1.09], [1, 1.19]];
+        break;
+      case "bear_pennant":
+        points = [[0, 1.12], [.18, 1.1], [.4, .87], [.52, .92], [.62, .9], [.72, .93], [.82, .91], [1, .81]];
+        break;
+      case "rising_wedge":
+        points = [[0, .97], [.18, 1.03], [.34, 1.0], [.5, 1.055], [.66, 1.035], [.8, 1.07], [.9, 1.06], [1, .98]];
+        break;
+      case "falling_wedge":
+        points = [[0, 1.03], [.18, .97], [.34, 1.0], [.5, .945], [.66, .965], [.8, .93], [.9, .94], [1, 1.02]];
+        break;
+      case "broadening_top":
+        points = [[0, .98], [.12, 1.02], [.24, .97], [.38, 1.06], [.5, .94], [.64, 1.08], [.74, .99], [.86, 1.0], [1, .9]];
+        break;
+      case "diamond_top":
+        points = [[0, 1.0], [.12, 1.04], [.24, .96], [.38, 1.08], [.5, .95], [.62, 1.03], [.74, .99], [.86, .97], [1, .89]];
+        break;
+      case "v_reversal":
+        points = [[0, 1.12], [.3, 1.06], [.55, .9], [.7, .98], [.84, 1.04], [1, 1.1]];
+        break;
+      case "island_reversal":
+        points = [[0, .95], [.28, 1.07], [.3, 1.0], [.55, 1.01], [.57, .94], [.8, .99], [1, .9]];
         break;
       default:
-        points = null;
+        points = [[0, .98], [.5, 1.0], [1, 1.02]];
     }
 
-    // K线组合：先构造趋势，再覆盖最后几根
+    // 按形态控制点生成走势，再转成K线
     const bars = [];
     let price = 100 * (0.98 + rnd() * 0.04);
     if (points) {
@@ -139,86 +168,6 @@
       return bars;
     }
 
-    const decay = key === "hammer" || key === "bullish_engulfing" || key === "morning_star" ||
-      key === "piercing" || key === "tweezer_bottom" || key === "three_soldiers" ? -1 :
-      key === "shooting_star" || key === "bearish_engulfing" || key === "evening_star" ||
-      key === "dark_cloud" || key === "tweezer_top" || key === "three_crows" ? 1 : 0;
-    for (let i = 0; i < n; i++) {
-      const drift = decay * (i / n) * 0.035;
-      const wave = Math.sin(i / 5.2) * 0.007;
-      const target = 100 * (1 + drift + wave + (rnd() - 0.5) * 0.006);
-      const o = i === 0 ? target : price;
-      const c = target;
-      const h = Math.max(o, c) * (1 + rnd() * 0.005 + 0.0015);
-      const l = Math.min(o, c) * (1 - rnd() * 0.005 - 0.0015);
-      bars.push({ o, c, h, l });
-      price = c;
-    }
-    const p = bars[bars.length - 1].c;
-    function setLast(k, o, c, h, l) {
-      if (bars.length < k) return;
-      bars[bars.length - k] = { o, c, h: Math.max(o, c, h), l: Math.min(o, c, l) };
-    }
-    switch (key) {
-      case "hammer":
-        setLast(1, p, p * 1.006, p * 1.008, p * 0.955);
-        break;
-      case "shooting_star":
-        setLast(1, p, p * 0.994, p * 1.045, p * 0.992);
-        break;
-      case "doji":
-        setLast(1, p, p * 1.0003, p * 1.018, p * 0.982);
-        break;
-      case "bullish_engulfing":
-        setLast(2, p * 1.02, p * 0.99, p * 1.026, p * 0.986);
-        setLast(1, p * 0.985, p * 1.025, p * 1.03, p * 0.98);
-        break;
-      case "bearish_engulfing":
-        setLast(2, p * 0.98, p * 1.01, p * 1.014, p * 0.974);
-        setLast(1, p * 1.015, p * 0.975, p * 1.02, p * 0.97);
-        break;
-      case "morning_star":
-        setLast(3, p * 1.03, p * 0.985, p * 1.034, p * 0.98);
-        setLast(2, p * 0.978, p * 0.982, p * 0.987, p * 0.971);
-        setLast(1, p * 0.975, p * 1.018, p * 1.022, p * 0.972);
-        break;
-      case "evening_star":
-        setLast(3, p * 0.97, p * 1.015, p * 1.02, p * 0.966);
-        setLast(2, p * 1.022, p * 1.018, p * 1.03, p * 1.013);
-        setLast(1, p * 1.02, p * 0.982, p * 1.025, p * 0.975);
-        break;
-      case "three_soldiers":
-        setLast(3, p * 0.97, p * 0.99, p * 0.995, p * 0.965);
-        setLast(2, p * 0.985, p * 1.01, p * 1.015, p * 0.98);
-        setLast(1, p * 1.005, p * 1.035, p * 1.04, p * 1.0);
-        break;
-      case "three_crows":
-        setLast(3, p * 1.03, p * 1.01, p * 1.035, p * 1.005);
-        setLast(2, p * 1.015, p * 0.99, p * 1.02, p * 0.985);
-        setLast(1, p * 0.995, p * 0.965, p * 0.998, p * 0.96);
-        break;
-      case "harami":
-        setLast(2, p * 1.045, p * 0.982, p * 1.05, p * 0.976);
-        setLast(1, p * 0.995, p * 1.012, p * 1.018, p * 0.99);
-        break;
-      case "piercing":
-        setLast(2, p * 1.035, p * 0.975, p * 1.04, p * 0.97);
-        setLast(1, p * 0.968, p * 1.018, p * 1.023, p * 0.963);
-        break;
-      case "dark_cloud":
-        setLast(2, p * 0.965, p * 1.025, p * 1.03, p * 0.96);
-        setLast(1, p * 1.03, p * 0.982, p * 1.036, p * 0.977);
-        break;
-      case "tweezer_bottom":
-        setLast(2, p * 1.005, p * 0.97, p * 1.01, p * 0.955);
-        setLast(1, p * 0.972, p * 1.005, p * 1.01, p * 0.9552);
-        break;
-      case "tweezer_top":
-        setLast(2, p * 0.995, p * 1.03, p * 1.045, p * 0.99);
-        setLast(1, p * 1.028, p * 0.995, p * 1.0452, p * 0.99);
-        break;
-    }
-    return bars;
   }
 
   function interpolate(points, n) {
@@ -311,8 +260,9 @@
     if (!p) return;
     $("modalCat").textContent = p.category;
     $("modalName").textContent = p.name;
-    $("modalChapter").textContent = p.chapter || "";
-    $("modalChapterText").textContent = p.chapter || "第4–6、12章";
+    const bookRef = (p.chapter || "") + (p.page ? " · " + p.page : "");
+    $("modalChapter").textContent = bookRef;
+    $("modalChapterText").textContent = bookRef || "第4–6章";
     $("modalTarget").textContent = p.target || "按形态高度/旗杆高度估算，需等突破确认";
     $("modalVolume").textContent = p.volume || "突破时放量更可靠";
     const dEl = $("modalDirection");
@@ -322,8 +272,158 @@
     $("modalPoints").innerHTML = (p.points || []).map((x) => "<li>" + esc(x) + "</li>").join("");
     $("modalEntry").textContent = p.entry || "等待形态确认后再行动";
     $("modalInvalid").textContent = p.invalid || "形态失败时及时止损";
+    const quote = (p.excerpt || "").trim();
+    $("modalQuote").hidden = !quote;
+    $("modalQuoteText").textContent = quote ? "“" + quote + "”" : "";
+    $("modalQuoteSource").textContent = quote ? "《期货市场技术分析》" + bookRef : "";
     $("patternModal").hidden = false;
     requestAnimationFrame(() => drawPattern($("modalThumb"), key, true));
+    loadCases(p);
+  }
+
+  function loadCases(p) {
+    const grid = $("caseGrid");
+    const empty = $("caseEmpty");
+    const status = $("caseStatus");
+    grid.innerHTML = "";
+    empty.hidden = true;
+    const cached = patternState.cases[p.key];
+    if (cached) {
+      patternState.caseData = cached.cases;
+      renderCaseCards(cached.cases, cached.auto);
+      return;
+    }
+    status.textContent = "正在扫描本地历史…";
+    const token = p.key;
+    patternState.caseKey = token;
+    api("/api/pattern/cases?key=" + encodeURIComponent(p.key)).then((data) => {
+      if (patternState.caseKey !== token) return;
+      patternState.cases[p.key] = { cases: data.cases || [], auto: data.auto !== false };
+      patternState.caseData = data.cases || [];
+      renderCaseCards(data.cases || [], data.auto !== false);
+    }).catch((err) => {
+      if (patternState.caseKey !== token) return;
+      status.textContent = "";
+      empty.hidden = false;
+      empty.textContent = "历史案例读取失败：" + err.message;
+    });
+  }
+
+  function renderCaseCards(cases, auto) {
+    const grid = $("caseGrid");
+    const empty = $("caseEmpty");
+    const status = $("caseStatus");
+    patternState.caseData = cases;
+    status.textContent = cases.length ? "点击案例看大图" : "";
+    grid.innerHTML = "";
+    if (!cases.length) {
+      empty.hidden = false;
+      empty.textContent = auto
+        ? "暂未在本地历史里扫描到足够典型的案例。可以先看图示和测验，或换一台有更长历史的行情数据再试。"
+        : "这个形态以人工确认为主，暂不生成自动历史案例；请对照书中图示和识别要点观察。";
+      return;
+    }
+    empty.hidden = true;
+    grid.innerHTML = cases.map((c, i) =>
+      '<button class="case-card" data-case="' + i + '" type="button">' +
+      '<canvas data-case-canvas="' + i + '"></canvas>' +
+      '<div class="case-card-name">' + esc(c.name || c.code) + ' <span style="font-weight:400;color:var(--faint)">' + esc(c.code) + "</span></div>" +
+      '<div class="case-card-meta"><span>' + esc((c.stats.pattern_date || "").replace(/-/g, ".")) + "</span>" +
+      '<span class="case-card-after ' + (c.stats.after_pct >= 0 ? "up" : "down") + '">后 ' + (c.stats.after_pct >= 0 ? "+" : "") + Number(c.stats.after_pct).toFixed(1) + "%</span></div></button>"
+    ).join("");
+    requestAnimationFrame(() => {
+      document.querySelectorAll("[data-case-canvas]").forEach((cv) => {
+        const c = cases[Number(cv.dataset.caseCanvas)];
+        if (c) drawCaseThumb(cv, c);
+      });
+    });
+    grid.onclick = (e) => {
+      const card = e.target.closest("[data-case]");
+      if (card) openCase(Number(card.dataset.case));
+    };
+  }
+
+  function drawCaseThumb(cv, c) {
+    const dpr = window.devicePixelRatio || 1;
+    const w = cv.clientWidth || 180, h = cv.clientHeight || 86;
+    cv.width = Math.round(w * dpr); cv.height = Math.round(h * dpr);
+    const ctx = cv.getContext("2d");
+    ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+    ctx.clearRect(0, 0, w, h);
+    const bars = c.bars || [];
+    if (!bars.length) return;
+    const prices = bars.map((b) => b.c);
+    const min = Math.min(...prices), max = Math.max(...prices);
+    const span = max - min || 1;
+    const pad = 5;
+    const x = (i) => pad + (i / Math.max(1, bars.length - 1)) * (w - pad * 2);
+    const y = (v) => h - pad - ((v - min) / span) * (h - pad * 2);
+    const fx = x(c.focus || 0);
+    ctx.fillStyle = "rgba(55, 105, 190, .06)";
+    ctx.fillRect(fx, 0, w - fx, h);
+    ctx.beginPath();
+    bars.forEach((b, i) => { i ? ctx.lineTo(x(i), y(b.c)) : ctx.moveTo(x(i), y(b.c)); });
+    ctx.strokeStyle = "#5679ad"; ctx.lineWidth = 1.2; ctx.stroke();
+    ctx.beginPath(); ctx.moveTo(fx, 2); ctx.lineTo(fx, h - 2);
+    ctx.setLineDash([3, 3]); ctx.strokeStyle = "#d18b2c"; ctx.lineWidth = 1; ctx.stroke();
+    ctx.setLineDash([]);
+  }
+
+  function openCase(idx) {
+    const c = (patternState.caseData || [])[idx];
+    if (!c) return;
+    $("caseTitle").textContent = (c.name || c.code) + " · " + c.code;
+    $("caseMeta").textContent = "日线 · 形态完成 " + (c.stats.pattern_date || "") + " · 之后 " + c.stats.bars_after + " 根K线";
+    const after = Number(c.stats.after_pct);
+    $("caseFacts").innerHTML =
+      '<span class="case-fact">形态 <b>' + esc(c.pattern.name) + "</b></span>" +
+      '<span class="case-fact">匹配度 <b>' + Number(c.pattern.score).toFixed(0) + "</b></span>" +
+      '<span class="case-fact">形态完成 <b>' + esc(c.stats.pattern_date) + "</b></span>" +
+      '<span class="case-fact">后续 <b class="' + (after >= 0 ? "up" : "down") + '">' + (after >= 0 ? "+" : "") + after.toFixed(2) + "%</b></span>" +
+      '<span class="case-fact">最大 <b>+' + Number(c.stats.max_pct).toFixed(1) + "%</b></span>" +
+      '<span class="case-fact">最小 <b>' + Number(c.stats.min_pct).toFixed(1) + "%</b></span>" +
+      '<span class="case-fact">目标 <b>' + esc(c.pattern.target || "按形态高度测算") + "</b></span>" +
+      (c.pattern.evidence || []).map((x) => '<span class="case-fact">' + esc(x) + "</span>").join("");
+    $("caseModal").hidden = false;
+    requestAnimationFrame(() => drawCaseChart(c));
+  }
+
+  function drawCaseChart(c) {
+    if (!window.echarts) return;
+    if (patternState.caseChart) { patternState.caseChart.dispose(); patternState.caseChart = null; }
+    const el = $("caseChart");
+    const chart = window.echarts.init(el, null, { renderer: "canvas" });
+    patternState.caseChart = chart;
+    const bars = c.bars || [];
+    const dates = bars.map((b) => {
+      const d = String(b.d || "");
+      if (d.includes("-")) return d.slice(5, 10);
+      return d.length >= 8 ? d.slice(4, 6) + "-" + d.slice(6, 8) : d;
+    });
+    const focus = c.focus || 0;
+    chart.setOption({
+      animation: false,
+      grid: { left: 50, right: 18, top: 20, bottom: 28 },
+      tooltip: { trigger: "axis", axisPointer: { type: "cross" } },
+      xAxis: { type: "category", data: dates, axisLabel: { fontSize: 11, color: "#7c8ba1" }, axisLine: { lineStyle: { color: "#dbe3ee" } } },
+      yAxis: { scale: true, axisLabel: { fontSize: 11, color: "#7c8ba1" }, splitLine: { lineStyle: { color: "#eef2f8" } } },
+      series: [{
+        type: "candlestick",
+        data: bars.map((b) => [b.o, b.c, b.l, b.h]),
+        itemStyle: { color: UP, color0: DOWN, borderColor: UP, borderColor0: DOWN },
+        markLine: {
+          symbol: "none", silent: true,
+          lineStyle: { color: "#d18b2c", type: "dashed", width: 1.2 },
+          label: { formatter: "形态完成", fontSize: 11, color: "#a56b1f" },
+          data: [{ xAxis: dates[focus] }],
+        },
+        markArea: {
+          silent: true,
+          itemStyle: { color: "rgba(55, 105, 190, .05)" },
+          data: [[{ xAxis: dates[focus] }, { xAxis: dates[bars.length - 1] }]],
+        },
+      }],
+    });
   }
 
   function bindAtlas() {
@@ -350,6 +450,10 @@
     $("btnClosePattern").addEventListener("click", () => { $("patternModal").hidden = true; });
     $("patternModal").addEventListener("click", (e) => {
       if (e.target.closest("[data-close]")) $("patternModal").hidden = true;
+    });
+    $("btnCloseCase").addEventListener("click", () => { $("caseModal").hidden = true; });
+    $("caseModal").addEventListener("click", (e) => {
+      if (e.target.closest("[data-close]")) $("caseModal").hidden = true;
     });
     $("btnMurphyNotes").addEventListener("click", () => { $("murphyModal").hidden = false; });
     $("btnCloseMurphy").addEventListener("click", () => { $("murphyModal").hidden = true; });
@@ -442,7 +546,7 @@
         trigger: "axis",
         axisPointer: { type: "cross", lineStyle: { color: "#5d6d87", type: "dashed" } },
         backgroundColor: "rgba(14,22,39,.96)", borderWidth: 0,
-        textStyle: { color: "#dbe5f6", fontSize: 11 },
+        textStyle: { color: "#dbe5f6", fontSize: 12 },
         formatter: (ps) => {
           if (!ps || !ps.length) return "";
           const b = bars[ps[0].dataIndex];
@@ -455,7 +559,7 @@
         { type: "category", data: labels, boundaryGap: true, gridIndex: 1, axisLine: { lineStyle: { color: "rgba(130,150,180,.18)" } }, axisLabel: { show: false }, axisTick: { show: false } },
       ],
       yAxis: [
-        { scale: true, position: "right", axisLabel: { color: "#70809a", fontSize: 9 }, axisLine: { show: false }, axisTick: { show: false }, splitLine: { lineStyle: { color: "rgba(130,150,180,.1)", type: "dashed" } } },
+        { scale: true, position: "right", axisLabel: { color: "#70809a", fontSize: 11 }, axisLine: { show: false }, axisTick: { show: false }, splitLine: { lineStyle: { color: "rgba(130,150,180,.1)", type: "dashed" } } },
         { scale: true, gridIndex: 1, position: "right", axisLabel: { show: false }, axisLine: { show: false }, axisTick: { show: false }, splitLine: { show: false } },
       ],
       graphic: [{
@@ -469,7 +573,7 @@
           markArea: {
             silent: true,
             itemStyle: { color: "rgba(72,118,255,.12)", borderColor: "rgba(115,155,255,.55)", borderWidth: 1 },
-            label: { show: true, position: "insideTop", color: "#9abaff", fontSize: 9, formatter: "题目区域" },
+            label: { show: true, position: "insideTop", color: "#9abaff", fontSize: 11, formatter: "题目区域" },
             data: [[{ xAxis: labels[start] }, { xAxis: labels[n - 1] }]],
           },
         },
@@ -499,7 +603,7 @@
       tooltip: {
         trigger: "axis",
         backgroundColor: "rgba(14,22,39,.96)", borderWidth: 0,
-        textStyle: { color: "#dbe5f6", fontSize: 10 },
+        textStyle: { color: "#dbe5f6", fontSize: 11 },
         formatter: (ps) => {
           if (!ps || !ps.length) return "";
           const b = zoomBars[ps[0].dataIndex];
@@ -567,7 +671,7 @@
         "<p><b>" + esc(a.category || "") + "</b> · " + esc(a.desc || "") + "</p>" +
         "<p><b>识别要点：</b>" + (a.points || []).slice(0, 2).map(esc).join("；") + "</p>" +
         "<p><b>确认 / 失效：</b>" + esc(a.entry || "") + "；若" + esc(a.invalid || "形态破坏") + "。</p>" +
-        "<p><b>书中章节：</b>" + esc(a.chapter || "") + "；<b>测算目标：</b>" + esc(a.target || "") +
+        "<p><b>书中章节：</b>" + esc(a.chapter || "") + (a.page ? " · " + esc(a.page) : "") + "；<b>测算目标：</b>" + esc(a.target || "") +
         "；<b>量能：</b>" + esc(a.volume || "") + "</p>" +
         '<p style="font-size:9px;color:var(--faint)">案例：' + esc(stock.name || "") + " " + esc(stock.code || "") +
         " · " + esc(stock.start_date || "") + " → " + esc(stock.end_date || "") + " · " + esc(stock.period || "") + "</p>" +
@@ -979,10 +1083,10 @@
       let bodyTop = c.bodyTop >= 0 ? p(c.bodyTop) : p((c.y0 + c.y1) / 2);
       let bodyBottom = c.bodyBottom >= 0 ? p(c.bodyBottom) : p((c.y0 + c.y1) / 2);
       if (bodyBottom > bodyTop) { const t = bodyTop; bodyTop = bodyBottom; bodyBottom = t; }
-      const isDoji = Math.abs(c.bodyBottom - c.bodyTop) < 1.8;
+      const isFlatBody = Math.abs(c.bodyBottom - c.bodyTop) < 1.8;
       const bull = mode === "cn" ? c.red >= c.green : c.green >= c.red;
       let o, cl;
-      if (isDoji) { o = cl = (bodyTop + bodyBottom) / 2; }
+      if (isFlatBody) { o = cl = (bodyTop + bodyBottom) / 2; }
       else if (bull) { cl = bodyTop; o = bodyBottom; }
       else { o = bodyTop; cl = bodyBottom; }
       bars.push({ o: round3(o), h: round3(Math.max(high, o, cl)), l: round3(Math.min(low, o, cl)), c: round3(cl), v: 0 });
@@ -1127,7 +1231,7 @@
       grid: { left: 12, right: 18, top: 12, bottom: 20, containLabel: true },
       tooltip: {
         trigger: "axis", backgroundColor: "rgba(17,26,46,.95)", borderWidth: 0,
-        textStyle: { color: "#e7edf8", fontSize: 10 },
+        textStyle: { color: "#e7edf8", fontSize: 11 },
         formatter: (p) => {
           const b = bars[p[0].dataIndex];
           return "第" + (p[0].dataIndex + 1) + "根<br/>开 " + b.o.toFixed(2) + "　收 " + b.c.toFixed(2) + "<br/>高 " + b.h.toFixed(2) + "　低 " + b.l.toFixed(2);
@@ -1136,7 +1240,7 @@
       xAxis: {
         type: "category", data: bars.map((_, i) => i + 1), boundaryGap: true,
         axisLine: { lineStyle: { color: "#e4e9f2" } }, axisTick: { show: false },
-        axisLabel: { color: "#9aa4b8", fontSize: 8, interval: Math.max(0, Math.ceil(bars.length / 8) - 1) },
+        axisLabel: { color: "#9aa4b8", fontSize: 10, interval: Math.max(0, Math.ceil(bars.length / 8) - 1) },
       },
       yAxis: {
         scale: true, axisLabel: { show: false }, axisLine: { show: false }, axisTick: { show: false },
@@ -1221,15 +1325,250 @@
   /* =================================================================
      标签页 / 启动
   ================================================================= */
+  /* =================================================================
+     手绘选股
+  ================================================================= */
+  function initShape() {
+    if (patternState.shape.seeded) return;
+    patternState.shape.seeded = true;
+    const cv = $("shapeCanvas");
+    const down = (e) => {
+      if (e.button !== undefined && e.button !== 0) return;
+      e.preventDefault();
+      cv.setPointerCapture && cv.setPointerCapture(e.pointerId);
+      patternState.shape.drawing = true;
+      patternState.shape.points = [];
+      $("shapeCanvasHint").hidden = true;
+      addShapePoint(e);
+    };
+    const move = (e) => {
+      if (!patternState.shape.drawing) return;
+      e.preventDefault();
+      const events = typeof e.getCoalescedEvents === "function" ? e.getCoalescedEvents() : [e];
+      (events.length ? events : [e]).forEach(addShapePoint);
+    };
+    const up = () => { patternState.shape.drawing = false; };
+    cv.addEventListener("pointerdown", down);
+    cv.addEventListener("pointermove", move);
+    cv.addEventListener("pointerup", up);
+    cv.addEventListener("pointercancel", up);
+    window.addEventListener("resize", debounce(() => {
+      if (patternState.tab === "shape") resizeShapeCanvas();
+    }, 160));
+  }
+
+  function addShapePoint(e) {
+    const cv = $("shapeCanvas");
+    const r = cv.getBoundingClientRect();
+    const x = Math.max(2, Math.min(r.width - 2, e.clientX - r.left));
+    const y = Math.max(2, Math.min(r.height - 2, e.clientY - r.top));
+    const pts = patternState.shape.points;
+    const last = pts[pts.length - 1];
+    if (!last || Math.hypot(x - last.x, y - last.y) >= 1.2) {
+      pts.push({ x, y });
+      drawShapeBoard();
+    }
+  }
+
+  function resizeShapeCanvas() {
+    const cv = $("shapeCanvas");
+    if (!cv || !cv.parentElement) return;
+    const w = cv.parentElement.clientWidth;
+    const h = cv.parentElement.clientHeight;
+    if (!w || !h) return;
+    const dpr = window.devicePixelRatio || 1;
+    if (cv.width !== Math.round(w * dpr) || cv.height !== Math.round(h * dpr)) {
+      cv.width = Math.round(w * dpr);
+      cv.height = Math.round(h * dpr);
+    }
+    drawShapeBoard();
+  }
+
+  function drawShapeBoard() {
+    const cv = $("shapeCanvas");
+    if (!cv) return;
+    const w = cv.clientWidth, h = cv.clientHeight;
+    if (!w || !h) return;
+    const ctx = cv.getContext("2d");
+    const dpr = window.devicePixelRatio || 1;
+    ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+    ctx.clearRect(0, 0, w, h);
+    // 网格
+    ctx.strokeStyle = "rgba(148, 171, 210, .14)";
+    ctx.lineWidth = 1;
+    for (let i = 1; i < 6; i++) {
+      const y = (h / 6) * i;
+      ctx.beginPath(); ctx.moveTo(0, y); ctx.lineTo(w, y); ctx.stroke();
+    }
+    for (let i = 1; i < 8; i++) {
+      const x = (w / 8) * i;
+      ctx.beginPath(); ctx.moveTo(x, 0); ctx.lineTo(x, h); ctx.stroke();
+    }
+    const pts = patternState.shape.points || [];
+    if (!pts.length) return;
+    // 直接使用指针的 CSS 坐标绘制，保证笔尖和红线完全重合；
+    // 不能在这里再做垂直归一化或加内边距，否则会看到“线在笔的旁边”。
+    const yOf = (v) => v;
+    ctx.beginPath();
+    pts.forEach((p, i) => { i ? ctx.lineTo(p.x, yOf(p.y)) : ctx.moveTo(p.x, yOf(p.y)); });
+    ctx.lineCap = "round"; ctx.lineJoin = "round";
+    ctx.strokeStyle = "#ff7b86"; ctx.lineWidth = 3;
+    ctx.shadowColor = "rgba(255, 123, 134, .35)"; ctx.shadowBlur = 10;
+    ctx.stroke();
+    ctx.shadowBlur = 0;
+    const first = pts[0], last = pts[pts.length - 1];
+    [first, last].forEach((p, i) => {
+      ctx.beginPath(); ctx.arc(p.x, yOf(p.y), 3.5, 0, Math.PI * 2);
+      ctx.fillStyle = i ? "#ffd166" : "#8fb1ff"; ctx.fill();
+    });
+  }
+
+  function clearShape() {
+    patternState.shape.points = [];
+    patternState.shape.results = [];
+    $("shapeCanvasHint").hidden = false;
+    $("shapeResults").innerHTML =
+      '<div class="shape-empty"><div class="result-empty-icon">✎</div><b>画一条走势线</b><p>点击「扫描相似股票」后，会按“形态结束日离现在多近 + 形态相似度”排序，显示最近出现过的股票。</p></div>';
+    $("shapeStatus").textContent = "等待画线";
+    drawShapeBoard();
+  }
+
+  function shapeDate(value, sep) {
+    const s = String(value || "");
+    if (/^\d{8}$/.test(s)) return s.slice(0, 4) + sep + s.slice(4, 6) + sep + s.slice(6, 8);
+    return s;
+  }
+
+  function resampleShape(values, n) {
+    const out = [];
+    const last = values.length - 1;
+    for (let i = 0; i < n; i++) {
+      const pos = i * last / (n - 1);
+      const lo = Math.floor(pos), hi = Math.min(last, lo + 1);
+      const f = pos - lo;
+      out.push(values[lo] * (1 - f) + values[hi] * f);
+    }
+    return out;
+  }
+
+  async function scanShape() {
+    const st = patternState.shape;
+    if (st.scanning) return;
+    if (st.points.length < 6) { toast("先画出至少一小段走势", "error"); return; }
+    const ys = st.points.map((p) => p.y);
+    const minY = Math.min(...ys), maxY = Math.max(...ys);
+    if (maxY - minY < 8) { toast("画的线太平了，画一点起伏更容易匹配", "error"); return; }
+    // 画布向下为低，发送时翻转成“向上=高”
+    const shape = resampleShape(st.points.map((p) => 1 - (p.y - minY) / (maxY - minY)), 30);
+    st.scanning = true;
+    const btn = $("shapeScan");
+    btn.disabled = true;
+    btn.textContent = "正在扫描…";
+    $("shapeStatus").textContent = "扫描本地日线中";
+    $("shapeResults").innerHTML = '<div class="shape-empty"><div class="result-empty-icon">⌁</div><b>正在扫描全市场</b><p>只比对最近 ' + st.lookback + ' 个交易日内结束的形态，请稍等。</p></div>';
+    try {
+      const data = await api("/api/pattern/shape-match", {
+        method: "POST",
+        body: { shape, lookback: st.lookback, limit: 20 },
+      });
+      if (!data.ok) throw new Error(data.error || "扫描失败");
+      st.results = data.results || [];
+      $("shapeStatus").textContent = st.results.length
+        ? "最近" + st.lookback + "天 · " + shapeDate(data.latest_date, "-")
+        : "最近" + st.lookback + "天 · 无匹配";
+      renderShapeResults();
+    } catch (err) {
+      $("shapeStatus").textContent = "扫描失败";
+      $("shapeResults").innerHTML = '<div class="shape-empty"><b>扫描失败</b><p>' + esc(err.message) + "</p></div>";
+    } finally {
+      st.scanning = false;
+      btn.disabled = false;
+      btn.textContent = "扫描相似股票";
+    }
+  }
+
+  function renderShapeResults() {
+    const results = patternState.shape.results || [];
+    const box = $("shapeResults");
+    if (!results.length) {
+      box.innerHTML = '<div class="shape-empty"><div class="result-empty-icon">⌁</div><b>没有找到足够近的相似形态</b><p>换一个形态，或把“最近天数”放宽到 20/30 天再试。</p></div>';
+      return;
+    }
+    box.innerHTML = results.map((c, i) =>
+      '<button class="shape-result" data-shape-idx="' + i + '" type="button">' +
+      '<canvas data-shape-spark="' + i + '"></canvas>' +
+      '<div class="shape-result-main"><div class="shape-result-top">' +
+      '<span class="shape-result-name">' + esc(c.name || c.code) + '</span>' +
+      '<span class="shape-result-score">' + Number(c.score).toFixed(0) + '</span></div>' +
+      '<div class="shape-result-meta">' +
+      '<span class="shape-result-recent">结束 ' + (c.days_ago === 0 ? "今天" : c.days_ago + " 天前") + '</span>' +
+      '<span>' + esc(String(c.pattern_date || "").replace(/^(\d{4})(\d{2})(\d{2})$/, "$1.$2.$3")) + '</span>' +
+      '<span>现价 ' + Number(c.latest_close).toFixed(2) + '</span>' +
+      '<span class="shape-result-after ' + (c.after_pct >= 0 ? "up" : "down") + '">后 ' + (c.after_pct >= 0 ? "+" : "") + Number(c.after_pct).toFixed(1) + "%</span>" +
+      '</div></div></button>'
+    ).join("");
+    requestAnimationFrame(() => {
+      document.querySelectorAll("[data-shape-spark]").forEach((cv) => {
+        const c = results[Number(cv.dataset.shapeSpark)];
+        if (c) drawShapeSpark(cv, c);
+      });
+    });
+    box.onclick = (e) => {
+      const el = e.target.closest("[data-shape-idx]");
+      if (el) openShapeResult(Number(el.dataset.shapeIdx));
+    };
+  }
+
+  function drawShapeSpark(cv, c) {
+    const dpr = window.devicePixelRatio || 1;
+    const w = cv.clientWidth || 88, h = cv.clientHeight || 46;
+    cv.width = Math.round(w * dpr); cv.height = Math.round(h * dpr);
+    const ctx = cv.getContext("2d");
+    ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+    ctx.clearRect(0, 0, w, h);
+    const bars = c.bars || [];
+    if (!bars.length) return;
+    const vals = bars.map((b) => b.c);
+    const mn = Math.min(...vals), mx = Math.max(...vals);
+    const span = mx - mn || 1;
+    const x = (i) => 5 + (i / Math.max(1, bars.length - 1)) * (w - 10);
+    const y = (v) => h - 5 - ((v - mn) / span) * (h - 10);
+    const focus = Math.max(0, Math.min(bars.length - 1, c.focus || 0));
+    ctx.strokeStyle = "#dbe5f6"; ctx.lineWidth = 1;
+    ctx.beginPath(); ctx.moveTo(x(focus), 2); ctx.lineTo(x(focus), h - 2); ctx.stroke();
+    ctx.beginPath();
+    vals.forEach((v, i) => { i ? ctx.lineTo(x(i), y(v)) : ctx.moveTo(x(i), y(v)); });
+    ctx.strokeStyle = "#6f8fbe"; ctx.lineWidth = 1.4; ctx.stroke();
+  }
+
+  function openShapeResult(idx) {
+    const c = (patternState.shape.results || [])[idx];
+    if (!c) return;
+    $("caseTitle").textContent = (c.name || c.code) + " · " + c.code;
+    $("caseMeta").textContent = "日线 · 形态结束 " + shapeDate(c.pattern_date, "-") + " · 最近出现（" + (c.days_ago === 0 ? "今天" : c.days_ago + " 天前") + "）";
+    const after = Number(c.after_pct);
+    $("caseFacts").innerHTML =
+      '<span class="case-fact">匹配度 <b>' + Number(c.score).toFixed(0) + "</b></span>" +
+      '<span class="case-fact">形态结束 <b>' + esc(shapeDate(c.pattern_date, "-")) + "</b></span>" +
+      '<span class="case-fact">现价 <b>' + Number(c.latest_close).toFixed(2) + "</b></span>" +
+      '<span class="case-fact">形态后 <b class="' + (after >= 0 ? "up" : "down") + '">' + (after >= 0 ? "+" : "") + after.toFixed(2) + "%</b></span>" +
+      '<span class="case-fact">期间最大 <b>+' + Number(c.max_pct).toFixed(1) + "%</b></span>" +
+      '<span class="case-fact">期间最小 <b>' + Number(c.min_pct).toFixed(1) + "%</b></span>" +
+      '<span class="case-fact">现在 <b>' + (c.latest_change >= 0 ? "+" : "") + Number(c.latest_change).toFixed(2) + "%</b></span>";
+    $("caseModal").hidden = false;
+    requestAnimationFrame(() => drawCaseChart(c));
+  }
+
   function switchTab(tab, updateHash) {
-    if (!["atlas", "quiz", "shot"].includes(tab)) tab = "atlas";
+    if (!["atlas", "quiz", "shot", "shape"].includes(tab)) tab = "atlas";
     patternState.tab = tab;
-    ["atlas", "quiz", "shot"].forEach((t) => {
+    ["atlas", "quiz", "shot", "shape"].forEach((t) => {
       $("pane-" + t).hidden = t !== tab;
       const b = document.querySelector('#patternTabs button[data-tab="' + t + '"]');
       if (b) b.classList.toggle("active", t === tab);
     });
     if (tab === "atlas") ensurePatterns();
+    if (tab === "shape") setTimeout(() => { initShape(); resizeShapeCanvas(); }, 30);
     if (tab === "quiz") {
       updateQuizScoreUI();
       if (!patternState.quiz.data && !patternState.quiz.loading) loadQuiz();
@@ -1249,7 +1588,7 @@
   function activate() {
     ensurePatterns();
     const div = (location.hash || "").replace("#", "").split("/");
-    const tab = div[0] === "pattern" && ["atlas", "quiz", "shot"].includes(div[1]) ? div[1] : patternState.tab;
+    const tab = div[0] === "pattern" && ["atlas", "quiz", "shot", "shape"].includes(div[1]) ? div[1] : patternState.tab;
     switchTab(tab, false);
     updateQuizScoreUI();
   }
@@ -1262,10 +1601,24 @@
       const b = e.target.closest("button[data-tab]");
       if (b) switchTab(b.dataset.tab);
     });
+    initShape();
+    $("shapeLookback").addEventListener("click", (e) => {
+      const b = e.target.closest("button[data-days]");
+      if (!b) return;
+      patternState.shape.lookback = Number(b.dataset.days) || 10;
+      document.querySelectorAll("#shapeLookback button").forEach((x) => x.classList.toggle("active", x === b));
+    });
+    $("shapeClear").addEventListener("click", clearShape);
+    $("shapeScan").addEventListener("click", scanShape);
     updateQuizScoreUI();
   }
 
-  window.KPattern = { activate, switchTab, _state: patternState };
+  function openByKey(key) {
+    if (window.KTrain && KTrain.switchView) KTrain.switchView("pattern");
+    ensurePatterns().then(() => openPattern(key)).catch(() => {});
+  }
+
+  window.KPattern = { activate, switchTab, openByKey, _state: patternState };
   if (document.readyState === "loading") {
     document.addEventListener("DOMContentLoaded", boot);
   } else {

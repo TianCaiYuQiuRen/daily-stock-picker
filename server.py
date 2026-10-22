@@ -22,10 +22,12 @@ if ROOT not in sys.path:
     sys.path.insert(0, ROOT)
 
 from core import (chart_series, config, engine, history, online, patterns,  # noqa: E402
-                  quotes, sell, snapshot, strategies, tdx_block, training)
+                  pattern_cases, quotes, sell, shape_match, snapshot, strategies,
+                  tdx_block, training)
 from core.tdx_local import TdxStore, board_of  # noqa: E402
 
 WEB_DIR = config.WEB_DIR
+BOOK_DIR = os.path.join(config.DATA_DIR, "book")
 MIME = {
     ".html": "text/html; charset=utf-8",
     ".css": "text/css; charset=utf-8",
@@ -453,6 +455,17 @@ class Handler(BaseHTTPRequestHandler):
             data = f.read()
         self._send(200, data, MIME.get(ext, "application/octet-stream"))
 
+    def _book_page(self, rel):
+        name = os.path.basename(rel)
+        if not re.fullmatch(r"p\d{4}\.webp", name):
+            return self._send(404, "Not Found", "text/plain; charset=utf-8")
+        path = os.path.join(BOOK_DIR, "pages", name)
+        if not os.path.isfile(path):
+            return self._send(404, "Not Found", "text/plain; charset=utf-8")
+        with open(path, "rb") as f:
+            data = f.read()
+        self._send(200, data, "image/webp")
+
     # ---------- routes ----------
     def do_GET(self):
         try:
@@ -462,6 +475,8 @@ class Handler(BaseHTTPRequestHandler):
                 return self._static("index.html")
             if path in ("/training", "/training/", "/training.html"):
                 return self._static("training.html")
+            if path.startswith("/book/pages/"):
+                return self._book_page(path)
             if path.startswith("/api/"):
                 return self._api_get(path, parse_qs(parsed.query))
             return self._static(path)
@@ -552,6 +567,20 @@ class Handler(BaseHTTPRequestHandler):
                 except Exception as exc:  # noqa: BLE001
                     return self._json({"ok": False, "error": str(exc)}, 502)
 
+            if path == "/api/pattern/shape-match":
+                shape = data.get("shape")
+                if not isinstance(shape, list):
+                    return self._json({"ok": False, "error": "请先在画板上画出走势"}, 400)
+                try:
+                    lookback = int(data.get("lookback") or 10)
+                    limit = int(data.get("limit") or 20)
+                    result = shape_match.find_matches(shape, lookback=lookback, limit=limit)
+                    return self._json({"ok": True, **result})
+                except ValueError as exc:
+                    return self._json({"ok": False, "error": str(exc)}, 400)
+                except Exception as exc:  # noqa: BLE001
+                    return self._json({"ok": False, "error": str(exc)}, 502)
+
             if path == "/api/pattern/analyze":
                 bars = data.get("bars")
                 if not isinstance(bars, list):
@@ -572,6 +601,20 @@ class Handler(BaseHTTPRequestHandler):
         if path == "/api/health":
             return self._json({"ok": True, "service": "daily-picker",
                                "time": datetime.now().strftime("%Y-%m-%d %H:%M:%S")})
+        if path == "/api/book":
+            mf = os.path.join(BOOK_DIR, "manifest.json")
+            if not os.path.isfile(mf):
+                return self._json({
+                    "ok": False,
+                    "error": "本机还没有生成电子书页面，请先运行 python tools/build_book.py",
+                }, 404)
+            try:
+                with open(mf, "r", encoding="utf-8") as fh:
+                    data = json.load(fh)
+                data["ok"] = True
+                return self._json(data)
+            except (OSError, ValueError) as exc:
+                return self._json({"ok": False, "error": str(exc)}, 500)
         if path == "/api/state":
             cfg = config.get()
             can_scan = (not remote) or (cfg.get("share") or {}).get("allow_remote_scan", True)
@@ -721,6 +764,20 @@ class Handler(BaseHTTPRequestHandler):
             period = (query.get("period") or ["day"])[0]
             try:
                 return self._json(training.make_quiz(period))
+            except Exception as exc:  # noqa: BLE001
+                return self._json({"ok": False, "error": str(exc)}, 502)
+
+        if path == "/api/pattern/cases":
+            key = (query.get("key") or [""])[0].strip()
+            if not key:
+                return self._json({"ok": False, "error": "缺少形态 key"}, 400)
+            force = (query.get("force") or ["0"])[0] in ("1", "true", "yes")
+            try:
+                cases = pattern_cases.get_cases(key, 3, force=force)
+                auto = bool(patterns.LIB_MAP.get(key, {}).get("detect", True))
+                return self._json({"ok": True, "key": key, "auto": auto, "cases": cases})
+            except KeyError as exc:
+                return self._json({"ok": False, "error": str(exc.args[0])}, 404)
             except Exception as exc:  # noqa: BLE001
                 return self._json({"ok": False, "error": str(exc)}, 502)
 

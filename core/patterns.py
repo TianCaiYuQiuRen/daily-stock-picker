@@ -5,7 +5,8 @@
   第4章 趋势、支撑阻力、趋势线/通道、回撤、缺口
   第5章 主要反转形态
   第6章 持续形态
-  第12章 日本蜡烛图
+
+（1994 中文版没有日本蜡烛图章节；第12章是点数图，因此不收录蜡烛图定义。）
 
 不依赖任何第三方库，输入标准 OHLCV 序列即可输出：
   - 趋势阶段、支撑/阻力
@@ -158,6 +159,8 @@ def _match(key, score, evidence, **extra):
         "entry": meta["entry"],
         "invalid": meta["invalid"],
         "chapter": meta.get("chapter", ""),
+        "page": meta.get("page", ""),
+        "excerpt": meta.get("excerpt", ""),
         "target": meta.get("target", ""),
         "volume": meta.get("volume", ""),
         "score": round(_clip(score, 35.0, 96.0), 1),
@@ -171,58 +174,6 @@ def _match(key, score, evidence, **extra):
 # ---------------------------------------------------------------------------
 # 单 K / 组合 K 线
 # ---------------------------------------------------------------------------
-def _doji(bars, ctx):
-    b = bars[-1]
-    rng = b["h"] - b["l"]
-    body = abs(b["c"] - b["o"])
-    if rng < ctx["atr"] * 0.45 or body > rng * 0.12:
-        return None
-    score = 52 + (8 if rng > ctx["atr"] * 1.2 else 2)
-    return _match("doji", score, ["实体仅占K线振幅的 %.1f%%" % (body / rng * 100)])
-
-
-def _stars(bars, ctx):
-    if len(bars) < 3:
-        return None
-    a, b, c = bars[-3], bars[-2], bars[-1]
-    a_body = abs(a["c"] - a["o"])
-    b_body = abs(b["c"] - b["o"])
-    c_body = abs(c["c"] - c["o"])
-    avg = max(ctx["avg_body"], 1e-9)
-    if a_body < avg * 0.8 or c_body < avg * 0.65:
-        return None
-    a_mid = (a["o"] + a["c"]) / 2.0
-    if a["c"] < a["o"] and c["c"] > c["o"] and b_body < avg * 0.55:
-        if b["c"] < min(a["c"], a["o"]) and c["c"] > a_mid and c["c"] < a["o"]:
-            return _match("morning_star", 74,
-                          ["长阴 → 小实体 → 长阳", "第三根阳线收在第一根阴线实体中部上方"])
-    if a["c"] > a["o"] and c["c"] < c["o"] and b_body < avg * 0.55:
-        if b["c"] > max(a["c"], a["o"]) and c["c"] < a_mid and c["c"] > a["o"]:
-            return _match("evening_star", 74,
-                          ["长阳 → 小实体 → 长阴", "第三根阴线收在第一根阳线实体中部下方"])
-    return None
-
-
-def _piercing_cloud(bars, ctx):
-    if len(bars) < 2:
-        return None
-    a, b = bars[-2], bars[-1]
-    a_body = abs(a["c"] - a["o"])
-    b_body = abs(b["c"] - b["o"])
-    if a_body < ctx["avg_body"] * 0.8 or b_body < a_body * 0.55:
-        return None
-    a_mid = (a["o"] + a["c"]) / 2.0
-    if a["c"] < a["o"] and b["c"] > b["o"] and b["o"] < a["c"] and b["c"] > a_mid and b["c"] < a["o"]:
-        return _match("piercing", 70,
-                      ["阳线低开高走，收在前阴线实体一半以上",
-                       "收盘较前阴线中点高 %.1f%%" % _pct(b["c"], a_mid)])
-    if a["c"] > a["o"] and b["c"] < b["o"] and b["o"] > a["c"] and b["c"] < a_mid and b["c"] > a["o"]:
-        return _match("dark_cloud", 70,
-                      ["阴线高开低走，收在前阳线实体一半以下",
-                       "收盘较前阳线中点低 %.1f%%" % _pct(b["c"], a_mid)])
-    return None
-
-
 def _double_bottom(bars, ctx):
     lows = _swings(bars, 3, "low")
     if len(lows) < 2:
@@ -231,6 +182,9 @@ def _double_bottom(bars, ctx):
         i2, p2 = lows[i]
         i1, p1 = lows[i - 1]
         if i2 - i1 < 8:
+            continue
+        if _pct(p1, bars[max(0, i1 - 20)]["c"]) > -3.0:
+            # 第5章：反转形态必须事先存在下降趋势
             continue
         sim = abs(_pct(p2, p1))
         if sim > 4.2:
@@ -270,6 +224,9 @@ def _double_top(bars, ctx):
         i1, p1 = highs[i - 1]
         if i2 - i1 < 8:
             continue
+        if _pct(p1, bars[max(0, i1 - 20)]["c"]) < 3.0:
+            # 第5章：反转形态必须事先存在上升趋势
+            continue
         sim = abs(_pct(p2, p1))
         if sim > 4.2:
             continue
@@ -306,6 +263,8 @@ def _head_shoulders_bottom(bars, ctx):
     i1, p1 = lows[-3]
     if not (i3 - i2 >= 5 and i2 - i1 >= 5):
         return None
+    if _pct(p1, bars[max(0, i1 - 20)]["c"]) > -3.0:
+        return None
     if not (p2 < p1 * 0.982 and p2 < p3 * 0.982):
         return None
     if abs(_pct(p3, p1)) > 5.5:
@@ -337,6 +296,8 @@ def _head_shoulders_top(bars, ctx):
     i2, p2 = highs[-2]
     i1, p1 = highs[-3]
     if not (i3 - i2 >= 5 and i2 - i1 >= 5):
+        return None
+    if _pct(p1, bars[max(0, i1 - 20)]["c"]) < 3.0:
         return None
     if not (p2 > p1 * 1.018 and p2 > p3 * 1.018):
         return None
@@ -394,7 +355,7 @@ def _triangle(bars, ctx):
                        "高点连线斜率 %.3f ATR/根，高点降低" % hs,
                        "后段振幅由 %.1f%% 收敛至 %.1f%%" % (r1, r2)],
                       levels={"support": lo, "resistance": hi})
-    if hs < -0.028 and ls > 0.028 and shrink:
+    if hs < -0.012 and ls > 0.012 and shrink:
         score = 58 + min(10, (abs(hs) + ls) * 35)
         if _pct(last_c, hi) > -3 or _pct(last_c, lo) < 3:
             score += 5
@@ -487,6 +448,8 @@ def _triple_top(bars, ctx):
     (i1, p1), (i2, p2), (i3, p3) = highs[-3:]
     if min(i2 - i1, i3 - i2) < 5 or len(bars) - 1 - i3 > 30:
         return None
+    if _pct(p1, bars[max(0, i1 - 20)]["c"]) < 3.0:
+        return None
     vals = [p1, p2, p3]
     spread = (max(vals) - min(vals)) / _mean(vals) * 100
     if spread > 4.0:
@@ -515,6 +478,8 @@ def _triple_bottom(bars, ctx):
         return None
     (i1, p1), (i2, p2), (i3, p3) = lows[-3:]
     if min(i2 - i1, i3 - i2) < 5 or len(bars) - 1 - i3 > 30:
+        return None
+    if _pct(p1, bars[max(0, i1 - 20)]["c"]) > -3.0:
         return None
     vals = [p1, p2, p3]
     spread = (max(vals) - min(vals)) / _mean(vals) * 100
@@ -618,35 +583,6 @@ def _wedge(bars, ctx):
     return None
 
 
-def _three_methods(bars, ctx):
-    if len(bars) < 5:
-        return None
-    b1, b2, b3, b4, b5 = bars[-5:]
-    body1 = abs(b1["c"] - b1["o"])
-    if body1 < ctx["avg_body"] * 1.15:
-        return None
-    mids = [b2, b3, b4]
-    mid_bodies = [abs(x["c"] - x["o"]) for x in mids]
-    if max(mid_bodies) > body1 * 0.62:
-        return None
-    if not all(min(x["o"], x["c"]) >= min(b1["o"], b1["c"]) for x in mids):
-        return None
-    if not all(max(x["o"], x["c"]) <= max(b1["o"], b1["c"]) for x in mids):
-        return None
-    body5 = abs(b5["c"] - b5["o"])
-    if body5 < ctx["avg_body"] * 0.85:
-        return None
-    if b1["c"] > b1["o"] and b5["c"] > b5["o"] and b5["c"] > b1["c"]:
-        return _match("rising_three_methods", 76,
-                      ["长阳 → 三根小实体整理 → 长阳创新高",
-                       "中间三根都守在第一根阳线实体范围内"])
-    if b1["c"] < b1["o"] and b5["c"] < b5["o"] and b5["c"] < b1["c"]:
-        return _match("falling_three_methods", 76,
-                      ["长阴 → 三根小实体反弹 → 长阴创新低",
-                       "中间三根都受制于第一根阴线实体范围内"])
-    return None
-
-
 def _v_reversal(bars, ctx):
     if len(bars) < 7:
         return None
@@ -673,11 +609,41 @@ def _v_reversal(bars, ctx):
     return None
 
 
+def _broadening_top(bars, ctx):
+    highs = _swings(bars, 3, "high")
+    lows = _swings(bars, 3, "low")
+    if len(highs) < 3 or len(lows) < 2:
+        return None
+    (h1, p1), (h2, p2), (h3, p3) = highs[-3:]
+    (l1, q1), (l2, q2) = lows[-2:]
+    if not (p1 < p2 < p3 and q1 > q2):
+        return None
+    if _pct(p1, bars[max(0, h1 - 20)]["c"]) < 3.0:
+        return None
+    if min(h2 - h1, h3 - h2, l2 - l1) < 4:
+        return None
+    if len(bars) - 1 - max(h3, l2) > 20:
+        return None
+    last = bars[-1]["c"]
+    near = _pct(last, q2)
+    if near > 1.0:
+        return None
+    width = _pct(p3, q2)
+    score = 66 + (8 if p3 > p2 > p1 else 0) + (8 if q2 < q1 else 0) + min(10, width * 0.4) + (8 if near <= 0 else 2)
+    target = q2 - (p3 - q2) * 0.75
+    return _match("broadening_top", score,
+                  ["三个峰依次抬高 %.2f / %.2f / %.2f" % (p1, p2, p3),
+                   "两个谷依次降低 %.2f / %.2f，波幅扩大" % (q1, q2),
+                   "现价距第二谷 %+.1f%%" % near],
+                  levels={"support": q2, "resistance": p3},
+                  target_price=round(target, 3))
+
+
 DETECTORS = [
     _head_shoulders_bottom, _head_shoulders_top,
     _triple_bottom, _triple_top, _double_bottom, _double_top,
     _v_reversal, _pennant, _flag, _wedge, _triangle, _rectangle,
-    _stars, _piercing_cloud, _doji, _three_methods,
+    _broadening_top,
 ]
 
 
@@ -804,7 +770,7 @@ def analyze(raw_bars, limit=420):
             "last": round(closes[-1], 3),
         },
         "volume": volume,
-        "source": "《期货市场技术分析》（约翰·墨菲）第4–6、12章形态体系",
+        "source": "《期货市场技术分析》（1994 中文版）第4–6章形态体系",
         "high": round(max(x["h"] for x in bars), 3),
         "low": round(min(x["l"] for x in bars), 3),
         "note": "匹配度由规则模型按价格结构计算，代表形态相似程度，不等同于涨跌概率。形态完成还需要突破与量能确认。",
@@ -818,9 +784,6 @@ def best_quiz_match(raw_bars):
         return None, res
     preferred = [m for m in res["matches"]
                  if m["group"] in ("reversal", "continuation") and m["score"] >= 70]
-    if not preferred:
-        preferred = [m for m in res["matches"]
-                     if m["group"] == "candle" and m["score"] >= 72]
     if not preferred:
         return None, res
     return preferred[0], res
