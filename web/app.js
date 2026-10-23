@@ -34,6 +34,9 @@
       init.headers["Content-Type"] = "application/json";
       init.body = JSON.stringify(init.body);
     }
+    if ((init.method || "GET").toUpperCase() === "POST" && state.csrf) {
+      init.headers["X-CSRF-Token"] = state.csrf;
+    }
     const resp = await fetch(path, init);
     let data = {};
     try { data = await resp.json(); } catch (e) { data = {}; }
@@ -408,11 +411,13 @@
   function setWriteEnabled(on) {
     const has = !!(state.result && state.result.items && state.result.items.length);
     const connected = !!(state.tdx && state.tdx.connected);
-    const enabled = has && on && state.canWrite && connected && resultMatchesSelection();
+    const stale = !!(state.freshness && state.freshness.level === "stale");
+    const enabled = has && on && state.canWrite && connected && !stale && resultMatchesSelection();
     ["btnWrite", "btnWriteSide"].forEach((id) => {
       const el = $(id);
       el.disabled = !enabled;
       el.hidden = !state.canWrite || !connected;
+      el.title = stale ? "日线数据滞后，请先更新通达信盘后数据" : "";
     });
   }
 
@@ -459,11 +464,40 @@
     }
   }
 
+  function renderFreshness() {
+    const f = state.freshness || {};
+    const pill = $("dataPill");
+    if (!pill) return;
+    pill.hidden = false;
+    pill.className = "pill data-pill " + (f.level || "unknown");
+    const d = f.last_date ? String(f.last_date) : "--";
+    const dateText = d.length === 8 ? d.slice(0, 4) + "-" + d.slice(4, 6) + "-" + d.slice(6, 8) : d;
+    $("dataText").textContent = "日线 " + dateText + (f.lag ? " · 滞后 " + f.lag + " 天" : "");
+  }
+
+  async function showHealth() {
+    let h = {};
+    try { h = await api("/api/health"); } catch (e) { h = {}; }
+    const f = h.freshness || state.freshness || {};
+    const scan = h.scan || state.scan || {};
+    const lines = [
+      "日线数据：" + (f.last_date || "--") + "（滞后 " + (f.lag == null ? "--" : f.lag) + " 个交易日）",
+      "数据来源：" + (f.source === "tdx" ? "通达信本地" : "在线行情"),
+      "最近选股：" + (scan.finished_at || "--") + (scan.error ? "（失败：" + scan.error + "）" : ""),
+      "服务时间：" + (h.time || "--"),
+      "日志文件：" + (h.log || "data/logs/server.log"),
+    ];
+    if (h.last_error) lines.push("最近错误：" + h.last_error);
+    if (f.level === "stale") lines.push("", "日线滞后超过 3 个交易日，写入板块已被禁止。请打开通达信下载盘后数据后刷新页面。");
+    showModal("数据与服务状态", lines.join("\n"), "知道了", false);
+  }
+
   function renderAll() {
     renderStrategy();
     renderStrategyBar();
     renderStats();
     renderMeta();
+    renderFreshness();
     renderTable();
     renderBlock();
     renderBoards();
@@ -507,6 +541,15 @@
     if (!state.selectedBoards.length) {
       toast("请先选择至少一个板块");
       return;
+    }
+    if (state.freshness && state.freshness.level === "stale") {
+      const go = await showModal(
+        "日线数据滞后",
+        "本地日线停留在 " + (state.freshness.last_date || "--") + "，已滞后 " +
+        (state.freshness.lag || 0) + " 个交易日。\n继续选股会使用旧数据，结果可能失真。\n\n仍要选股吗？",
+        "仍要选股", true
+      );
+      if (!go) return;
     }
     setScanning(true);
     updateProgress({ phase: "正在启动选股…", pct: 0.01 });
@@ -856,6 +899,7 @@
     $("chartModal").addEventListener("click", (e) => { if (e.target.id === "chartModal") closeChart(); });
     $("historyModal").addEventListener("click", (e) => { if (e.target.id === "historyModal") closeHistoryModal(); });
     $("btnSettings").addEventListener("click", openDrawer);
+    $("dataPill").addEventListener("click", showHealth);
     $("btnCloseDrawer").addEventListener("click", closeDrawer);
     $("overlay").addEventListener("click", closeDrawer);
     $("btnCancelSettings").addEventListener("click", closeDrawer);
@@ -1649,6 +1693,8 @@
       state.scan = s.scan || { running: false };
       state.result = s.result || null;
       state.share = s.share || {};
+      state.csrf = s.csrf || "";
+      state.freshness = s.freshness || null;
       state.sort = loadSort();
       try {
         const params = new URLSearchParams(location.search);

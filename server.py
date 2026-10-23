@@ -3,8 +3,10 @@
 import atexit
 import calendar
 import json
+import logging
 import os
 import re
+import secrets
 import shutil
 import socket
 import subprocess
@@ -14,6 +16,7 @@ import time
 import traceback
 from datetime import datetime, timedelta
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
+from logging.handlers import RotatingFileHandler
 from urllib.parse import parse_qs, urlparse
 import urllib.request
 
@@ -39,6 +42,23 @@ MIME = {
 
 _STORES = {}
 
+LOG_DIR = os.path.join(config.DATA_DIR, "logs")
+os.makedirs(LOG_DIR, exist_ok=True)
+LOG_PATH = os.path.join(LOG_DIR, "server.log")
+logger = logging.getLogger("daily-picker")
+if not logger.handlers:
+    logger.setLevel(logging.INFO)
+    handler = RotatingFileHandler(LOG_PATH, maxBytes=5 * 1024 * 1024, backupCount=3, encoding="utf-8")
+    handler.setFormatter(logging.Formatter("%(asctime)s %(levelname)s %(message)s", "%Y-%m-%d %H:%M:%S"))
+    logger.addHandler(handler)
+
+
+def log(msg):
+    try:
+        logger.info(msg)
+    except Exception:
+        pass
+
 
 def get_store(root):
     store = _STORES.get(root)
@@ -59,6 +79,45 @@ def bars_for(market, code, limit=400):
         online.fetch_bars(market, code)
         bars = online.get_bars(market, code)
     return bars[:limit]
+
+
+def freshness():
+    """日线数据新鲜度：ok / warn / stale。"""
+    cfg = config.get()
+    store = get_store(cfg.get("tdx_root") or "")
+    source = "online" if (cfg.get("data_source") == "online" or not store.available()) else "tdx"
+    if source == "online":
+        market_date = (STATE.result or {}).get("market_date") or 0
+    else:
+        market_date = store.last_trade_date()
+    today = datetime.now().date()
+    lag = 0
+    if market_date:
+        try:
+            last = datetime.strptime(str(market_date), "%Y%m%d").date()
+        except ValueError:
+            last = None
+        if last:
+            cur = last
+            while cur < today:
+                cur += timedelta(days=1)
+                if cur.weekday() < 5:
+                    lag += 1
+    if not market_date:
+        level = "unknown"
+    elif lag <= 1:
+        level = "ok"
+    elif lag <= 3:
+        level = "warn"
+    else:
+        level = "stale"
+    return {
+        "source": source,
+        "last_date": market_date,
+        "lag": lag,
+        "level": level,
+        "today": int(today.strftime("%Y%m%d")),
+    }
 
 
 def lan_ip():
@@ -183,6 +242,8 @@ class AppState:
         self.last_snap_date = ""
         self.write = {"ok": None, "message": "", "at": ""}
         self.last_remote_scan = 0.0
+        self.csrf = secrets.token_hex(16)
+        self.last_error = ""
 
     def board_stats(self, cfg):
         stats = {key: 0 for key in config.BOARDS}
@@ -221,6 +282,8 @@ class AppState:
                 "scan": dict(self.scan),
                 "result": self.result,
                 "write": dict(self.write),
+                "freshness": freshness(),
+                "csrf": self.csrf,
                 "remote": remote,
                 "can_write": not remote,
                 "can_scan": can_scan,
@@ -293,6 +356,7 @@ def _run_scan_async(boards=None, strategy_key=None, auto_write=False):
             STATE.scan["pct"] = round(float(pct), 3)
 
     def worker():
+        log("开始选股 strategy=%s boards=%s" % (strategy_key or "", ",".join(boards or [])))
         result, err = engine.safe_scan(progress, boards, strategy_key)
         with STATE.lock:
             STATE.scan["running"] = False
@@ -301,9 +365,13 @@ def _run_scan_async(boards=None, strategy_key=None, auto_write=False):
             if err:
                 STATE.scan["error"] = err
                 STATE.scan["phase"] = "失败"
+                STATE.last_error = "选股失败：%s" % err
+                log("选股失败：%s" % err)
             else:
                 STATE.result = result
                 STATE.scan["phase"] = "完成"
+                STATE.last_error = ""
+                log("选股完成：%d 只，用时 %.1fs" % (result.get("matched", 0), result.get("elapsed", 0)))
                 try:
                     history.save(result)
                 except Exception:
@@ -311,8 +379,8 @@ def _run_scan_async(boards=None, strategy_key=None, auto_write=False):
         if result and auto_write and config.get()["schedule"].get("auto_write"):
             try:
                 _write_block(auto=True)
-            except Exception:
-                pass
+            except Exception as exc:
+                log("自动写入失败：%s" % exc)
 
     threading.Thread(target=worker, daemon=True).start()
     return True
@@ -329,6 +397,17 @@ def _write_block(auto=False, restart=False):
         pairs = [(it["market"], it["code"]) for it in result["items"]]
         root = config.get()["tdx_root"]
 
+    fresh = freshness()
+    if fresh["level"] == "stale":
+        msg = "日线数据停留在 %s（滞后 %d 个交易日），请先更新通达信盘后数据再写入" % (
+            fresh["last_date"], fresh["lag"])
+        if auto:
+            with STATE.lock:
+                STATE.write = {"ok": False, "message": msg}
+            return {"ok": False, "skipped": True, "reason": "stale",
+                    "name": name, "removed": 0, "count": 0}
+        raise ValueError(msg)
+
     was_running = tdx_block.is_tdx_running()
     if was_running and auto:
         with STATE.lock:
@@ -344,6 +423,7 @@ def _write_block(auto=False, restart=False):
         time.sleep(1.0)
 
     info = tdx_block.write_block(root, name, pairs)
+    log("写入板块 %s：清空原 %d 只，写入 %d 只" % (name, info.get("removed", 0), info["count"]))
     info["ok"] = True
     info["at"] = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
     info["auto"] = auto
@@ -419,6 +499,24 @@ class Handler(BaseHTTPRequestHandler):
             return False
         return True
 
+    def _origin_ok(self):
+        """浏览器的跨站 POST 一律拒绝；无 Origin 的本机 curl 放行。"""
+        origin = self.headers.get("Origin") or self.headers.get("Referer") or ""
+        if not origin:
+            return True
+        try:
+            parsed = urlparse(origin)
+        except ValueError:
+            return False
+        host = self.headers.get("Host", "")
+        return parsed.netloc == host or parsed.hostname in ("127.0.0.1", "localhost")
+
+    def _csrf_ok(self):
+        """带 Origin 的浏览器请求必须带页面注入的 CSRF token。"""
+        if not (self.headers.get("Origin") or self.headers.get("Referer")):
+            return True
+        return self.headers.get("X-CSRF-Token", "") == STATE.csrf
+
     def _send(self, code, body, content_type="application/json; charset=utf-8"):
         if isinstance(body, str):
             body = body.encode("utf-8")
@@ -491,6 +589,13 @@ class Handler(BaseHTTPRequestHandler):
             data = self._body()  # 先读完请求体，避免 keep-alive 连接残留字节
             remote = self._remote()
             cfg = config.get()
+
+            if not self._origin_ok():
+                log("拦截跨站 POST %s origin=%s" % (path, self.headers.get("Origin")))
+                return self._json({"ok": False, "error": "跨站请求被拒绝"}, 403)
+            if path in ("/api/write", "/api/config", "/api/share") and not self._csrf_ok():
+                log("拦截缺少 CSRF token 的 POST %s" % path)
+                return self._json({"ok": False, "error": "请求校验失败，请刷新页面后重试"}, 403)
 
             if path == "/api/scan":
                 if remote and not (cfg.get("share") or {}).get("allow_remote_scan", True):
@@ -642,8 +747,20 @@ class Handler(BaseHTTPRequestHandler):
             days = max(20, min(400, days))
             return self._json(amv.compute(days))
         if path == "/api/health":
-            return self._json({"ok": True, "service": "daily-picker",
-                               "time": datetime.now().strftime("%Y-%m-%d %H:%M:%S")})
+            with STATE.lock:
+                scan = dict(STATE.scan)
+                write = dict(STATE.write)
+                last_error = STATE.last_error
+            return self._json({
+                "ok": True,
+                "service": "daily-picker",
+                "time": datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
+                "freshness": freshness(),
+                "scan": scan,
+                "write": write,
+                "last_error": last_error,
+                "log": LOG_PATH,
+            })
         if path == "/api/book":
             mf = os.path.join(BOOK_DIR, "manifest.json")
             if not os.path.isfile(mf):
@@ -878,13 +995,15 @@ def main():
     atexit.register(SHARE.stop)
     local = "http://127.0.0.1:%d" % port
     lan = "http://%s:%d" % (lan_ip(), port)
+    fresh = freshness()
+    log("服务启动 port=%d tdx=%s data_source=%s freshness=%s" % (
+        port, cfg.get("tdx_root") or "-", cfg.get("data_source") or "auto", fresh))
     print("=" * 60)
-    print("  每日选股系统已启动")
+    print("  每日选股系统已启动（后台运行）")
     print("  通达信目录：%s" % (cfg.get("tdx_root") or "未检测到"))
     print("  本机访问：%s" % local)
-    print("  局域网访问：%s" % lan)
-    print("  公网分享：点网页右上角「分享」生成链接")
-    print("  保持本窗口运行，程序会按设定时间自动选股")
+    print("  日线数据：%s（滞后 %d 个交易日）" % (fresh.get("last_date"), fresh.get("lag", 0)))
+    print("  日志文件：%s" % LOG_PATH)
     print("=" * 60)
     try:
         httpd.serve_forever()

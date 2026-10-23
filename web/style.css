@@ -972,3 +972,11 @@ a.strategy-chip.etf-entry { text-decoration: none; display: inline-flex; align-i
 @media (max-width: 760px) {
   .etf-chart-panel { left: 10px; right: 10px; bottom: 10px; width: auto; height: 52vh; }
 }
+
+/* ---------- data freshness pill ---------- */
+.data-pill { cursor: pointer; gap: 6px; }
+.data-pill .dot { background: #0a9e6b; }
+.data-pill.warn .dot { background: #f0a020; }
+.data-pill.stale .dot { background: #e5343f; }
+.data-pill.stale { color: #c62834; background: #fff1f2; border-color: #ffd6d9; }
+.data-pill.warn { color: #a86400; background: #fff7e8; border-color: #ffe3b0; }
