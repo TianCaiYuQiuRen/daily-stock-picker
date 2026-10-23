@@ -150,6 +150,40 @@ class ShareManager:
 
     URL_RE = re.compile(r"https://[a-zA-Z0-9-]+\.trycloudflare\.com")
 
+    def _save_desktop_link(self, url):
+        """把最新公网链接写到桌面，方便随时复制。"""
+        if not url:
+            return
+        now = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+        text = (
+            "每日选股 · 公网访问链接\n"
+            "========================\n"
+            "更新时间：%s\n\n"
+            "K线训练营：\n%s/training\n\n"
+            "选股首页：\n%s/\n\n"
+            "ETF 选股：\n%s/etf.html\n\n"
+            "说明：\n"
+            "1. 这是临时公网链接，电脑关机、休眠或断网后会失效。\n"
+            "2. 链接失效后重新点「分享」，会生成新地址并自动更新本文件。\n"
+            "3. 访客只能浏览和选股，不能写入通达信板块。\n"
+        ) % (now, url, url, url)
+        dirs = [
+            os.path.join(os.path.expanduser("~"), "Desktop"),
+            os.path.join(os.path.expanduser("~"), "OneDrive", "Desktop"),
+        ]
+        for folder in dirs:
+            if not folder or not os.path.isdir(folder):
+                continue
+            path = os.path.join(folder, "每日选股_公网链接.txt")
+            try:
+                tmp = path + ".tmp"
+                with open(tmp, "w", encoding="utf-8") as f:
+                    f.write(text)
+                os.replace(tmp, path)
+                return
+            except OSError:
+                continue
+
     def __init__(self):
         self.lock = threading.Lock()
         self.proc = None
@@ -217,6 +251,7 @@ class ShareManager:
                     m = self.URL_RE.search(line)
                     if m:
                         self.url = m.group(0)
+                        self._save_desktop_link(self.url)
                 if "ERR" in line and not self.url and not self.error:
                     self.error = line.strip()[:240]
         except Exception:
