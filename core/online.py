@@ -1,4 +1,4 @@
-# -*- coding: utf-8 -*-
+﻿# -*- coding: utf-8 -*-
 """在线数据模式：没有安装通达信时，用网络行情 + 在线日线工作。"""
 import json
 import os
@@ -13,7 +13,10 @@ UA = ("Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 "
       "(KHTML, like Gecko) Chrome/124.0 Safari/537.36")
 UNIV_PATH = os.path.join(config.DATA_DIR, "online_universe.json")
 KLINE_DIR = os.path.join(config.DATA_DIR, "kline")
-TODAY = time.strftime("%Y%m%d")
+
+
+def _today():
+    return time.strftime("%Y%m%d")
 
 
 def _get(url, timeout=20):
@@ -29,7 +32,7 @@ def fetch_universe(force=False, progress=None):
         try:
             with open(UNIV_PATH, "r", encoding="utf-8") as f:
                 data = json.load(f)
-            if data.get("date") == TODAY and data.get("items"):
+            if data.get("date") == _today() and data.get("items"):
                 return [(m, c) for m, c in data["items"]]
         except (OSError, ValueError):
             pass
@@ -64,7 +67,7 @@ def fetch_universe(force=False, progress=None):
     if items:
         config.ensure_dirs()
         with open(UNIV_PATH, "w", encoding="utf-8") as f:
-            json.dump({"date": TODAY, "items": items}, f)
+            json.dump({"date": _today(), "items": items}, f)
     return items
 
 
@@ -76,7 +79,7 @@ def get_bars(market, code):
     try:
         with open(_path(market, code), "r", encoding="utf-8") as f:
             data = json.load(f)
-        if data.get("date") == TODAY:
+        if data.get("date") == _today():
             return [tuple(b) for b in data.get("bars") or []]
     except (OSError, ValueError):
         pass
@@ -113,7 +116,7 @@ def fetch_bars(market, code):
     os.makedirs(KLINE_DIR, exist_ok=True)
     try:
         with open(_path(market, code), "w", encoding="utf-8") as f:
-            json.dump({"date": TODAY, "bars": bars}, f)
+            json.dump({"date": _today(), "bars": bars}, f)
     except OSError:
         return False
     return True
@@ -142,3 +145,4 @@ def prefetch(pairs, progress=None):
                 except Exception:
                     pass
     return ok
+

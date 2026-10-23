@@ -2,12 +2,42 @@
 """选股引擎：行情 -> 本地日线 -> 指标 -> 战法 -> 结果。"""
 import time
 import traceback
+from datetime import datetime
 
 from core import config, indicators, online, quotes, snapshot, strategies, tdx_local
 
 
 class ScanError(Exception):
     pass
+
+
+def _trading_time(now=None):
+    now = now or datetime.now()
+    if now.weekday() >= 5:
+        return False
+    hm = now.strftime("%H%M")
+    return ("0915" <= hm <= "1130") or ("1300" <= hm <= "1500")
+
+
+def _patch_last_bar(bars, q):
+    """用实时价更新当日那根日线的收盘/最高/最低，避免盘中指标停在早盘。"""
+    if not bars:
+        return bars
+    price = float(q.get("price") or 0)
+    t = str(q.get("time") or "")
+    if price <= 0 or len(t) < 8:
+        return bars
+    try:
+        qdate = int(t[:8])
+    except ValueError:
+        return bars
+    d, o, h, l, c, amount, volume = bars[-1]
+    if d != qdate:
+        return bars
+    hi = max(h, float(q.get("high") or price), price)
+    lo = min(l, float(q.get("low") or price), price)
+    bars[-1] = (d, o, hi, lo, price, amount, volume)
+    return bars
 
 
 def _is_st(name):
@@ -53,10 +83,17 @@ def run_scan(progress=None, boards=None, strategy_key=None):
     overrides = (cfg.get("strategy_params") or {}).get(strategy_key) or {}
     strategy = strategies.get_strategy(strategy_key, overrides)
     store = tdx_local.TdxStore(cfg["tdx_root"])
+    today_int = int(time.strftime("%Y%m%d"))
+    tdx_stale = store.available() and store.last_trade_date() < today_int
     if cfg.get("data_source") == "online":
         mode = "online"
+    elif store.available():
+        if tdx_stale:
+            mode = "online-intraday" if _trading_time() else "online"
+        else:
+            mode = "tdx"
     else:
-        mode = "tdx" if store.available() else "online"
+        mode = "online"
 
     filters = cfg.get("filters", {})
     picked_boards = boards if boards is not None else (filters.get("boards") or list(config.BOARDS))
@@ -64,12 +101,16 @@ def run_scan(progress=None, boards=None, strategy_key=None):
     if not picked_boards:
         raise ScanError("请至少选择一个板块（主板 / 创业板 / 科创板 / 北交所）")
 
-    if mode == "tdx":
+    if store.available() and mode in ("tdx", "online", "online-intraday"):
         universe = [(m, c) for m, c in store.universe()
                     if tdx_local.board_of(m, c) in picked_boards]
         if not universe:
             raise ScanError("所选板块在本地没有日线数据，请先打开通达信下载盘后数据。")
-        market_date = store.last_trade_date()
+        market_date = today_int if mode != "tdx" else store.last_trade_date()
+        if mode != "tdx":
+            report("通达信日线未更新，改用在线日线…", 0.08)
+            online.prefetch(universe, progress=lambda p: report(
+                "正在下载在线日线 %d%%" % int(p * 100), 0.08 + 0.58 * p))
     else:
         report("正在获取全市场股票列表…", 0.02)
         all_univ = online.fetch_universe(
@@ -95,7 +136,7 @@ def run_scan(progress=None, boards=None, strategy_key=None):
         if t > quote_time:
             quote_time = t
 
-    if mode == "online":
+    if mode in ("online", "online-intraday"):
         if len(quote_time) >= 8 and quote_time[:8].isdigit():
             market_date = int(quote_time[:8])
         else:
@@ -131,7 +172,19 @@ def run_scan(progress=None, boards=None, strategy_key=None):
         if (q.get("volume") or 0) <= 0:
             continue
 
-        bars = store.bars(market, code, limit=220) if mode == "tdx" else online.get_bars(market, code)
+        if mode == "tdx":
+            bars = store.bars(market, code, limit=220)
+        else:
+            bars = online.get_bars(market, code)
+            if not bars:
+                online.fetch_bars(market, code)
+                bars = online.get_bars(market, code)
+            if bars and _trading_time() and bars[-1][0] < today_int:
+                online.fetch_bars(market, code)
+                fresh = online.get_bars(market, code)
+                if fresh:
+                    bars = fresh
+            bars = _patch_last_bar(bars, q)
         if _recent_bad(bars, tdx_local.board_of(market, code)):
             continue
         f = indicators.build_features(bars, q, market_date, pct_1445=pct_map.get(code),

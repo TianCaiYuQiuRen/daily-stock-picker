@@ -90,6 +90,10 @@ def freshness():
         market_date = (STATE.result or {}).get("market_date") or 0
     else:
         market_date = store.last_trade_date()
+        last_mode = str((STATE.result or {}).get("data_mode") or "")
+        if last_mode.startswith("online") and (STATE.result or {}).get("market_date"):
+            market_date = STATE.result.get("market_date")
+            source = "online"
     today = datetime.now().date()
     lag = 0
     if market_date:
@@ -117,7 +121,16 @@ def freshness():
         "lag": lag,
         "level": level,
         "today": int(today.strftime("%Y%m%d")),
+        "trading": is_trading_time(),
     }
+
+
+def is_trading_time(now=None):
+    now = now or datetime.now()
+    if now.weekday() >= 5:
+        return False
+    hm = now.strftime("%H%M")
+    return ("0915" <= hm <= "1130") or ("1300" <= hm <= "1500")
 
 
 def lan_ip():
@@ -398,6 +411,14 @@ def _write_block(auto=False, restart=False):
         root = config.get()["tdx_root"]
 
     fresh = freshness()
+    if is_trading_time():
+        msg = "交易时段保护：收盘后再写入板块，避免关闭通达信影响交易"
+        if auto:
+            with STATE.lock:
+                STATE.write = {"ok": False, "message": msg}
+            return {"ok": False, "skipped": True, "reason": "trading",
+                    "name": name, "removed": 0, "count": 0}
+        raise ValueError(msg)
     if fresh["level"] == "stale":
         msg = "日线数据停留在 %s（滞后 %d 个交易日），请先更新通达信盘后数据再写入" % (
             fresh["last_date"], fresh["lag"])

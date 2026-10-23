@@ -412,12 +412,14 @@
     const has = !!(state.result && state.result.items && state.result.items.length);
     const connected = !!(state.tdx && state.tdx.connected);
     const stale = !!(state.freshness && state.freshness.level === "stale");
-    const enabled = has && on && state.canWrite && connected && !stale && resultMatchesSelection();
+    const trading = !!(state.freshness && state.freshness.trading);
+    const enabled = has && on && state.canWrite && connected && !stale && !trading && resultMatchesSelection();
     ["btnWrite", "btnWriteSide"].forEach((id) => {
       const el = $(id);
       el.disabled = !enabled;
       el.hidden = !state.canWrite || !connected;
-      el.title = stale ? "日线数据滞后，请先更新通达信盘后数据" : "";
+      el.title = trading ? "交易时段保护：收盘后再写入板块"
+        : (stale ? "日线数据滞后，请先更新通达信盘后数据" : "");
     });
   }
 
@@ -462,6 +464,11 @@
       $("blockDesc").textContent = "尚未写入，点击下方按钮创建板块";
       $("writeHint").textContent = "通达信只在启动时读取板块，写入后需重启客户端";
     }
+    if (state.freshness && state.freshness.trading) {
+      $("writeHint").textContent = "交易时段保护：收盘后再写入板块，避免关闭通达信影响交易";
+    } else if (state.freshness && state.freshness.level === "stale") {
+      $("writeHint").textContent = "日线数据滞后，请先更新通达信盘后数据再写入";
+    }
   }
 
   function renderFreshness() {
@@ -472,7 +479,8 @@
     pill.className = "pill data-pill " + (f.level || "unknown");
     const d = f.last_date ? String(f.last_date) : "--";
     const dateText = d.length === 8 ? d.slice(0, 4) + "-" + d.slice(4, 6) + "-" + d.slice(6, 8) : d;
-    $("dataText").textContent = "日线 " + dateText + (f.lag ? " · 滞后 " + f.lag + " 天" : "");
+    const label = f.source === "online" ? "在线 " : "日线 ";
+    $("dataText").textContent = label + dateText + (f.lag ? " · 滞后 " + f.lag + " 天" : "");
   }
 
   async function showHealth() {
