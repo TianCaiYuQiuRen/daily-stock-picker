@@ -21,7 +21,7 @@ ROOT = os.path.dirname(os.path.abspath(__file__))
 if ROOT not in sys.path:
     sys.path.insert(0, ROOT)
 
-from core import (chart_series, config, engine, history, online, patterns,  # noqa: E402
+from core import (amv, chart_series, config, engine, history, online, patterns,  # noqa: E402
                   pattern_cases, quotes, sell, shape_match, snapshot, strategies,
                   tdx_block, training)
 from core.tdx_local import TdxStore, board_of  # noqa: E402
@@ -598,6 +598,13 @@ class Handler(BaseHTTPRequestHandler):
 
     def _api_get(self, path, query):
         remote = self._remote()
+        if path == "/api/amv":
+            try:
+                days = int((query.get("days") or ["160"])[0])
+            except ValueError:
+                days = 160
+            days = max(20, min(400, days))
+            return self._json(amv.compute(days))
         if path == "/api/health":
             return self._json({"ok": True, "service": "daily-picker",
                                "time": datetime.now().strftime("%Y-%m-%d %H:%M:%S")})

@@ -1471,6 +1471,73 @@
     loadCalendar();
   }
 
+  /* ---------- 0AMV 活跃市值 ---------- */
+  let amvChart = null;
+
+  async function loadAmv() {
+    try {
+      const d = await api("/api/amv?days=160");
+      if (!d.ok) {
+        $("amvCard").hidden = false;
+        $("amvSub").textContent = d.error || "暂无数据";
+        return;
+      }
+      renderAmv(d);
+    } catch (e) { /* 指标加载失败不影响选股 */ }
+  }
+
+  function renderAmv(d) {
+    $("amvCard").hidden = false;
+    $("amvValue").textContent = Number(d.value).toLocaleString("zh-CN", { maximumFractionDigits: 1 });
+    const chg = $("amvChg");
+    chg.textContent = (d.chg >= 0 ? "+" : "") + Number(d.chg).toFixed(2) + "%";
+    chg.className = "amv-chg " + (d.chg >= 0 ? "up" : "down");
+    let sub = "更新 " + d.last_date + " · 沪深成交额 10 日平滑 ÷ 1e7（通达信指数日线）";
+    if (d.stale_days > 1) sub += " · 数据滞后 " + d.stale_days + " 天";
+    $("amvSub").textContent = sub;
+
+    const color = d.chg >= 0 ? "#e5343f" : "#0a9e6b";
+    if (amvChart) { amvChart.dispose(); amvChart = null; }
+    amvChart = echarts.init($("amvChart"));
+    const dates = (d.series || []).map((x) => x.date);
+    const values = (d.series || []).map((x) => x.value);
+    amvChart.setOption({
+      animation: false,
+      grid: { left: 8, right: 12, top: 10, bottom: 18, containLabel: true },
+      tooltip: {
+        trigger: "axis",
+        backgroundColor: "rgba(27,36,54,.92)", borderWidth: 0,
+        textStyle: { color: "#fff", fontSize: 12 },
+        formatter: (ps) => ps[0].axisValue + "<br/>0AMV " + Number(ps[0].data).toLocaleString("zh-CN"),
+      },
+      xAxis: {
+        type: "category", data: dates, boundaryGap: false,
+        axisLabel: { fontSize: 10, color: "#9aa5b8", interval: Math.max(1, Math.floor(dates.length / 6)) },
+        axisTick: { show: false }, axisLine: { lineStyle: { color: "#e3e9f3" } },
+      },
+      yAxis: {
+        scale: true,
+        splitLine: { lineStyle: { color: "#f1f4f9" } },
+        axisLabel: {
+          fontSize: 10, color: "#9aa5b8",
+          formatter: (v) => (v >= 10000 ? (v / 10000).toFixed(1) + "万" : v),
+        },
+      },
+      series: [{
+        name: "0AMV", type: "line", data: values, showSymbol: false, smooth: true,
+        lineStyle: { width: 2, color },
+        areaStyle: {
+          color: {
+            type: "linear", x: 0, y: 0, x2: 0, y2: 1,
+            colorStops: [{ offset: 0, color: color + "33" }, { offset: 1, color: color + "00" }],
+          },
+        },
+      }],
+    });
+  }
+
+  window.addEventListener("resize", () => { if (amvChart) amvChart.resize(); });
+
   /* ---------- 启动 ---------- */
   async function init() {
     bind();
@@ -1541,6 +1608,7 @@
         pollScan();
       }
       scheduleQuotes();
+      loadAmv();
     } catch (e) {
       showModal("无法连接选股服务", "请确认后台程序仍在运行。\n" + e.message);
     }

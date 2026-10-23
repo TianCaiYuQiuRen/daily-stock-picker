@@ -901,3 +901,30 @@ tbody tr.clickable:hover { background: #f7faff; }
   .content { display: block; }
   .side { display: flex; }
 }
+
+/* ---------- 0AMV active market value ---------- */
+.amv-card {
+  display: flex; gap: 24px; align-items: stretch;
+  padding: 18px 22px; margin: 0 0 18px; min-height: 168px;
+}
+.amv-left { flex: 0 0 300px; display: flex; flex-direction: column; justify-content: center; min-width: 0; }
+.amv-title { font-size: 15px; font-weight: 700; color: #5b6b85; display: flex; align-items: center; gap: 6px; flex-wrap: wrap; }
+.amv-title span { color: #2f6bff; font-size: 18px; font-weight: 800; }
+.amv-title em {
+  font-style: normal; font-size: 11px; color: #9aa5b8;
+  border: 1px solid #e3e9f3; border-radius: 6px; padding: 1px 6px;
+}
+.amv-value { display: flex; align-items: baseline; gap: 8px; margin: 6px 0 4px; }
+.amv-value b { font-size: 38px; font-weight: 800; font-variant-numeric: tabular-nums; letter-spacing: -.5px; }
+.amv-value small { font-size: 13px; color: #8a94a6; }
+.amv-chg { font-style: normal; font-size: 16px; font-weight: 700; }
+.amv-chg.up { color: #e5343f; }
+.amv-chg.down { color: #0a9e6b; }
+.amv-sub { font-size: 12.5px; color: #9aa5b8; line-height: 1.6; }
+.amv-chart { flex: 1; min-width: 0; height: 168px; }
+@media (max-width: 760px) {
+  .amv-card { flex-direction: column; gap: 10px; padding: 14px; }
+  .amv-left { flex: auto; }
+  .amv-value b { font-size: 30px; }
+  .amv-chart { height: 150px; }
+}
