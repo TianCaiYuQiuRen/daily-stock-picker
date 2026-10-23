@@ -939,3 +939,17 @@ tbody tr.clickable:hover { background: #f7faff; }
 .amv-rule-status.ok { color: #0a9e6b; }
 .amv-rule-text { font-size: 11.5px; color: #8a94a6; line-height: 1.55; }
 
+
+/* ---------- ETF page ---------- */
+.etf-content { grid-template-columns: minmax(0, 1fr); }
+.etf-empty { text-align: center; color: #9aa5b8; padding: 28px 12px; font-size: 14px; }
+.etf-kind { display: inline-block; padding: 3px 9px; border-radius: 8px; font-size: 12px; font-weight: 700; white-space: nowrap; }
+.etf-kind.pure { background: #eef9f3; color: #0a7a54; }
+.etf-kind.mixed { background: #fff5e6; color: #b26a00; }
+.etf-kind.index { background: #eef4ff; color: #2c56b8; }
+.etf-content td.up { color: #e5343f; }
+.etf-content td.down { color: #0a9e6b; }
+.etf-sector { font-size: 13px; color: #5b6b85; }
+
+/* ETF entry chip */
+a.strategy-chip.etf-entry { text-decoration: none; display: inline-flex; align-items: center; }

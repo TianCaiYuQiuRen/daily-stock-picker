@@ -1,0 +1,68 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>ETF 选股 · 每日选股</title>
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Crect width='64' height='64' rx='16' fill='%232f6bff'/%3E%3Ctext x='32' y='44' font-size='34' text-anchor='middle' fill='white'%3EE%3C/text%3E%3C/svg%3E">
+<link rel="stylesheet" href="/style.css">
+</head>
+<body>
+<div class="app">
+  <header class="topbar">
+    <div class="brand">
+      <div class="logo">E</div>
+      <div class="brand-text">
+        <div class="brand-name">ETF 选股</div>
+        <div class="brand-sub">纯血 · 混血 · 股指 · 周 K</div>
+      </div>
+    </div>
+    <div class="top-right">
+      <a class="icon-btn" href="/">← 返回选股</a>
+      <a class="icon-btn" href="/training.html">K线训练</a>
+    </div>
+  </header>
+
+  <main>
+    <section class="hero card">
+      <div class="hero-main">
+        <div class="eyebrow">WEEKLY · 少妇条件</div>
+        <div class="hero-title"><h1>ETF 选股</h1><span class="demo-tag">周线</span></div>
+        <p class="hero-desc">白线在黄线上；周 KDJ 的 J 值 ≤ 35 且 &gt; -20；周涨跌幅绝对值 &lt; 2.45%。按名称/跟踪指数归类：<b>纯血</b>（单一板块）、<b>混血</b>（两个板块），宽基/境外指数单独归为<b>股指</b>。</p>
+        <div class="strategy-chips" id="etfCats"></div>
+      </div>
+      <div class="stats">
+        <div class="stat"><div class="stat-num" id="etfTotal">--</div><div class="stat-label">ETF 总数</div></div>
+        <div class="stat hot"><div class="stat-num" id="etfMatched">--</div><div class="stat-label">符合条件</div></div>
+        <div class="stat"><div class="stat-num" id="etfTime">--</div><div class="stat-label">运行用时</div></div>
+      </div>
+    </section>
+
+    <section class="actions">
+      <button id="btnEtfScan" class="btn primary">重新筛选</button>
+      <span class="meta" id="etfMeta">正在加载…</span>
+    </section>
+
+    <section class="content etf-content">
+      <div class="card table-card">
+        <div class="table-wrap">
+          <table>
+            <thead>
+              <tr>
+                <th>#</th><th>代码</th><th>名称</th>
+                <th class="num">现价</th><th class="num">日涨幅</th><th class="num">周涨幅</th><th class="num">周J</th>
+                <th>类别</th><th>板块</th><th class="num">成交额</th>
+              </tr>
+            </thead>
+            <tbody id="etfBody">
+              <tr><td colspan="10" class="etf-empty">正在筛选全部 ETF，约需 10 秒…</td></tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </section>
+  </main>
+</div>
+<script src="/etf.js"></script>
+</body>
+</html>

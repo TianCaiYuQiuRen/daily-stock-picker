@@ -21,7 +21,7 @@ ROOT = os.path.dirname(os.path.abspath(__file__))
 if ROOT not in sys.path:
     sys.path.insert(0, ROOT)
 
-from core import (amv, chart_series, config, engine, history, online, patterns,  # noqa: E402
+from core import (amv, chart_series, config, engine, etf, history, online, patterns,  # noqa: E402
                   pattern_cases, quotes, sell, shape_match, snapshot, strategies,
                   tdx_block, training)
 from core.tdx_local import TdxStore, board_of  # noqa: E402
@@ -598,6 +598,16 @@ class Handler(BaseHTTPRequestHandler):
 
     def _api_get(self, path, query):
         remote = self._remote()
+        if path == "/api/etf/scan":
+            category = (query.get("category") or ["all"])[0]
+            if category not in ("all", "pure", "mixed", "index"):
+                category = "all"
+            try:
+                force = (query.get("refresh") or ["0"])[0] in ("1", "true")
+                return self._json(etf.scan(category, force=force))
+            except Exception as exc:  # noqa: BLE001
+                return self._json({"ok": False, "error": str(exc)}, 500)
+
         if path == "/api/amv":
             try:
                 days = int((query.get("days") or ["160"])[0])
