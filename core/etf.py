@@ -165,6 +165,16 @@ def scale_bars(bars):
             for d, o, h, l, c, amount, volume in bars]
 
 
+def _recent_gap(bars, threshold=3.0):
+    """近 10 个交易日是否出现 ≥3% 的跳空。"""
+    for i in range(max(1, len(bars) - 10), len(bars)):
+        pc = bars[i - 1][4]
+        o = bars[i][1]
+        if pc and abs(o / pc - 1.0) * 100.0 >= threshold:
+            return True
+    return False
+
+
 def to_weekly(bars):
     """日线聚合为周线，保留最后交易日作为日期。"""
     out = []
@@ -224,6 +234,8 @@ def _scan_all(min_weeks=120, pct_abs_max=2.45):
             continue
         totals[kind] += 1
         bars = scale_bars(store.bars(market, code, limit=900))
+        if _recent_gap(bars):
+            continue
         weekly = to_weekly(bars)
         if len(weekly) < min_weeks:
             continue

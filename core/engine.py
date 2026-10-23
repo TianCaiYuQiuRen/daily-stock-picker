@@ -15,6 +15,28 @@ def _is_st(name):
     return "ST" in up or "退" in up
 
 
+def _recent_bad(bars, board):
+    """近 10 个交易日出现大跳空（≥3%）或一字板，返回 True。"""
+    if len(bars) < 2:
+        return False
+    limit = {"bj": 29.5, "star": 19.5, "gem": 19.5}.get(board, 9.5)
+    window = bars[-11:]
+    for i in range(1, len(window)):
+        _, o, h, l, c, _, _ = window[i]
+        _, _, ph, pl, pc, _, _ = window[i - 1]
+        if pc <= 0:
+            continue
+        gap = abs(o / pc - 1.0) * 100.0
+        full_up = l > ph and (l / ph - 1.0) * 100.0 >= 3.0
+        full_down = h < pl and (pl / h - 1.0) * 100.0 >= 3.0
+        if gap >= 3.0 or full_up or full_down:
+            return True
+        one_word = (h - l) <= 1e-6 and abs(o - c) <= 1e-6 and abs(o - h) <= 1e-6
+        if one_word and abs(c / pc - 1.0) * 100.0 >= limit:
+            return True
+    return False
+
+
 def run_scan(progress=None, boards=None, strategy_key=None):
     """执行一次全市场选股，返回结果 dict。progress(phase, pct) 可选。"""
     t0 = time.time()
@@ -110,6 +132,8 @@ def run_scan(progress=None, boards=None, strategy_key=None):
             continue
 
         bars = store.bars(market, code, limit=220) if mode == "tdx" else online.get_bars(market, code)
+        if _recent_bad(bars, tdx_local.board_of(market, code)):
+            continue
         f = indicators.build_features(bars, q, market_date, pct_1445=pct_map.get(code),
                                       use_close=closed)
         if not f:
