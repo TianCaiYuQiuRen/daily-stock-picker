@@ -1492,26 +1492,49 @@
     const chg = $("amvChg");
     chg.textContent = (d.chg >= 0 ? "+" : "") + Number(d.chg).toFixed(2) + "%";
     chg.className = "amv-chg " + (d.chg >= 0 ? "up" : "down");
-    let sub = "更新 " + d.last_date + " · 日K + EMA12 · 沪深成交额 10 日平滑 ÷ 1e7（通达信指数日线）";
+    let sub = "更新 " + d.last_date + " · 日K + EMA12 · 滚轮缩放 · 沪深成交额 10 日平滑 ÷ 1e7（通达信指数日线）";
     if (d.stale_days > 1) sub += " · 数据滞后 " + d.stale_days + " 天";
     $("amvSub").textContent = sub;
 
     if (amvChart) { amvChart.dispose(); amvChart = null; }
     amvChart = echarts.init($("amvChart"));
-    const dates = (d.series || []).map((x) => x.date);
-    const ohlc = (d.series || []).map((x) => [x.open, x.value, x.low, x.high]);
+    const rows = d.series || [];
+    const dates = rows.map((x) => x.date);
+    const values = rows.map((x) => x.value);
+    const ohlc = rows.map((x) => [x.open, x.value, x.low, x.high]);
+    const emas = rows.map((x) => x.ema);
+    const chgMap = {};
+    rows.forEach((x) => { chgMap[x.date] = x.chg; });
     const fmt = (v) => Number(v).toLocaleString("zh-CN", { maximumFractionDigits: 1 });
+    const rangeFor = (start, end) => {
+      const n = values.length;
+      const s = Math.max(0, Math.floor((n * start) / 100));
+      const e = Math.min(n, Math.ceil((n * end) / 100));
+      const seg = values.slice(s, Math.max(s + 1, e));
+      const mn = Math.min(...seg);
+      const mx = Math.max(...seg);
+      const pad = (mx - mn) * 0.08 || mx * 0.005;
+      return [mn - pad, mx + pad];
+    };
+    const initialStart = 40;
+    const initRange = rangeFor(initialStart, 100);
     amvChart.setOption({
       animation: false,
-      grid: { left: 8, right: 12, top: 10, bottom: 18, containLabel: true },
+      grid: { left: 8, right: 12, top: 10, bottom: 30, containLabel: true },
       tooltip: {
         trigger: "axis",
+        axisPointer: { type: "cross" },
         backgroundColor: "rgba(27,36,54,.92)", borderWidth: 0,
         textStyle: { color: "#fff", fontSize: 12 },
         formatter: (ps) => {
           const v = ps[0].data;
-          return ps[0].axisValue + "<br/>开 " + fmt(v[0]) + "<br/>收 " + fmt(v[1]) +
-            "<br/>高 " + fmt(v[3]) + "<br/>低 " + fmt(v[2]);
+          const date = ps[0].axisValue;
+          const chg = Number(chgMap[date] || 0);
+          const color = chg >= 0 ? "#ff7a7a" : "#4ade80";
+          return date + "<br/>开 " + fmt(v[0]) + "　收 " + fmt(v[1]) +
+            "<br/>高 " + fmt(v[3]) + "　低 " + fmt(v[2]) +
+            '<br/><span style="color:' + color + '">涨跌幅 ' +
+            (chg >= 0 ? "+" : "") + chg.toFixed(2) + "%</span>";
         },
       },
       xAxis: {
@@ -1520,24 +1543,37 @@
         axisTick: { show: false }, axisLine: { lineStyle: { color: "#e3e9f3" } },
       },
       yAxis: {
-        scale: true,
+        min: initRange[0], max: initRange[1],
         splitLine: { lineStyle: { color: "#f1f4f9" } },
         axisLabel: {
           fontSize: 10, color: "#9aa5b8",
           formatter: (v) => (v >= 10000 ? (v / 10000).toFixed(1) + "万" : v),
         },
       },
+      dataZoom: [
+        { type: "inside", xAxisIndex: 0, start: initialStart, end: 100,
+          zoomOnMouseWheel: true, moveOnMouseMove: true, moveOnMouseWheel: false },
+        { type: "slider", xAxisIndex: 0, start: initialStart, end: 100,
+          height: 12, bottom: 2, borderColor: "transparent",
+          backgroundColor: "#f1f5ff", fillerColor: "rgba(47,107,255,.15)",
+          handleStyle: { color: "#2f6bff" }, textStyle: { fontSize: 9, color: "#9aa5b8" } },
+      ],
       series: [{
-        name: "0AMV", type: "candlestick", data: ohlc, barMaxWidth: 6,
+        name: "0AMV", type: "candlestick", data: ohlc, barMaxWidth: 10,
         itemStyle: {
           color: "#e5343f", color0: "#0a9e6b",
           borderColor: "#e5343f", borderColor0: "#0a9e6b",
         },
       }, {
-        name: "EMA12", type: "line", data: (d.series || []).map((x) => x.ema),
+        name: "EMA12", type: "line", data: emas,
         showSymbol: false, smooth: true, z: 3,
         lineStyle: { width: 1.5, color: "#e6b800" },
       }],
+    });
+    amvChart.on("datazoom", () => {
+      const dz = (amvChart.getOption().dataZoom || [])[0] || {};
+      const r = rangeFor(Number(dz.start || 0), Number(dz.end || 100));
+      amvChart.setOption({ yAxis: { min: r[0], max: r[1] } });
     });
   }
 
