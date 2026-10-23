@@ -598,6 +598,32 @@ class Handler(BaseHTTPRequestHandler):
 
     def _api_get(self, path, query):
         remote = self._remote()
+        if path == "/api/etf/chart":
+            code = (query.get("code") or [""])[0].strip()
+            period = (query.get("period") or ["week"])[0]
+            if not (len(code) == 6 and code.isdigit()):
+                return self._json({"ok": False, "error": "ETF 代码无效"}, 400)
+            market = quotes.market_of(code)
+            store = get_store(config.get().get("tdx_root"))
+            if not store.available():
+                return self._json({"ok": False, "error": "需要通达信本地数据"}, 400)
+            bars = etf.scale_bars(store.bars(market, code, limit=900))
+            if not bars:
+                return self._json({"ok": False, "error": "没有这只 ETF 的日线数据"}, 404)
+            q = quotes.fetch_few([(market, code)]).get(code)
+            if not q:
+                return self._json({"ok": False, "error": "行情获取失败"}, 502)
+            if period == "day":
+                use, limit, period = bars, 160, "day"
+            else:
+                use, limit, period = etf.to_weekly(bars), 120, "week"
+            series = chart_series.build_series(use, q, use_close=True, limit=limit)
+            if not series:
+                return self._json({"ok": False, "error": "历史数据不足"}, 400)
+            return self._json({"ok": True, "code": code, "market": market,
+                               "name": q.get("name", ""), "period": period,
+                               "series": series})
+
         if path == "/api/etf/scan":
             category = (query.get("category") or ["all"])[0]
             if category not in ("all", "pure", "mixed", "index"):

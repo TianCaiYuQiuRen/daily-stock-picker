@@ -159,6 +159,12 @@ def list_etfs():
     return out
 
 
+def scale_bars(bars):
+    """通达信 ETF 价格以 0.001 元存储，换算成 0.01 元口径。"""
+    return [(d, o / 10.0, h / 10.0, l / 10.0, c / 10.0, amount, volume)
+            for d, o, h, l, c, amount, volume in bars]
+
+
 def to_weekly(bars):
     """日线聚合为周线，保留最后交易日作为日期。"""
     out = []
@@ -217,7 +223,7 @@ def _scan_all(min_weeks=120, pct_abs_max=2.45):
         if kind in ("excluded", "other"):
             continue
         totals[kind] += 1
-        bars = store.bars(market, code, limit=900)
+        bars = scale_bars(store.bars(market, code, limit=900))
         weekly = to_weekly(bars)
         if len(weekly) < min_weeks:
             continue

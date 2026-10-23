@@ -48,7 +48,7 @@
     if (d.market_date) {
       const s = String(d.market_date);
       $("etfMeta").textContent = "周线数据 " + s.slice(0, 4) + "-" + s.slice(4, 6) + "-" + s.slice(6, 8) +
-        " · 更新 " + (d.generated_at || "").slice(11, 16) + " · 按名称/跟踪指数归类";
+        " · 更新 " + (d.generated_at || "").slice(11, 16) + " · 按名称/跟踪指数归类 · 悬停看周K / 右键切日K";
     }
 
     const items = state.items || [];
@@ -59,7 +59,7 @@
     $("etfBody").innerHTML = items.map((it, i) => {
       const up = Number(it.pct) >= 0;
       const wup = Number(it.weekly_pct) >= 0;
-      return '<tr>' +
+      return '<tr data-code="' + esc(it.code) + '" data-name="' + esc(it.name) + '">' +
         '<td class="rank">' + (i + 1) + "</td>" +
         '<td class="code">' + esc(it.code) + "</td>" +
         '<td class="name">' + esc(it.name) + "</td>" +
@@ -73,6 +73,107 @@
         '<td class="num">' + fmtAmt(it.amount) + "</td>" +
         "</tr>";
     }).join("");
+    bindRows();
+  }
+
+  /* ---------- 悬停 K 线 ---------- */
+  let chartInst = null;
+  let chartCode = "";
+  let chartName = "";
+  let chartPeriod = "week";
+  let hoverTimer = null;
+  const chartCache = new Map();
+
+  function bindRows() {
+    $("etfBody").querySelectorAll("tr[data-code]").forEach((tr) => {
+      tr.addEventListener("mouseenter", () => {
+        clearTimeout(hoverTimer);
+        hoverTimer = setTimeout(() => openEtfChart(tr.dataset.code, tr.dataset.name, "week"), 120);
+      });
+      tr.addEventListener("contextmenu", (e) => {
+        e.preventDefault();
+        const next = (chartCode === tr.dataset.code && chartPeriod === "week") ? "day" : "week";
+        openEtfChart(tr.dataset.code, tr.dataset.name, next, true);
+      });
+    });
+  }
+
+  async function openEtfChart(code, name, period, force) {
+    if (!code) return;
+    $("etfChartPanel").hidden = false;
+    $("etfChartName").textContent = (name || "") + " " + code;
+    $("etfChartPeriod").textContent = period === "day" ? "日K" : "周K";
+
+    if (!force && chartInst && chartCode === code && chartPeriod === period) return;
+    chartCode = code;
+    chartName = name || "";
+    chartPeriod = period;
+    const key = code + ":" + period;
+    const cached = chartCache.get(key);
+    if (cached) { renderEtfChart(cached); return; }
+
+    $("etfChartMeta").textContent = "加载中…";
+    try {
+      const res = await fetch("/api/etf/chart?code=" + encodeURIComponent(code) + "&period=" + period);
+      const d = await res.json();
+      if (!d.ok) throw new Error(d.error || "加载失败");
+      chartCache.set(key, d);
+      if (chartCode === code && chartPeriod === period) renderEtfChart(d);
+    } catch (e) {
+      $("etfChartMeta").textContent = e.message;
+    }
+  }
+
+  function renderEtfChart(d) {
+    const s = d.series;
+    $("etfChartName").textContent = (d.name || "") + " " + d.code;
+    $("etfChartPeriod").textContent = d.period === "day" ? "日K" : "周K";
+    $("etfChartMeta").textContent = (d.period === "day" ? "日K" : "周K") + " · " +
+      (s.dates[s.dates.length - 1] || "");
+
+    if (chartInst) { chartInst.dispose(); chartInst = null; }
+    chartInst = echarts.init($("etfChartBox"));
+    const up = "#e5343f", down = "#0a9e6b";
+    const volData = s.volumes.map((v, i) => ({
+      value: v,
+      itemStyle: { color: s.ohlc[i][1] >= s.ohlc[i][0] ? up : down },
+    }));
+    chartInst.setOption({
+      animation: false,
+      backgroundColor: "#fff",
+      tooltip: {
+        trigger: "axis", axisPointer: { type: "cross" },
+        backgroundColor: "rgba(27,36,54,.92)", borderWidth: 0,
+        textStyle: { color: "#fff", fontSize: 11 },
+      },
+      axisPointer: { link: [{ xAxisIndex: "all" }] },
+      grid: [
+        { left: 54, right: 14, top: 8, height: "48%" },
+        { left: 54, right: 14, top: "61%", height: "10%" },
+        { left: 54, right: 14, top: "74%", height: "18%" },
+      ],
+      xAxis: [
+        { type: "category", data: s.dates, gridIndex: 0, axisLabel: { show: false }, axisTick: { show: false }, axisLine: { lineStyle: { color: "#dde3ee" } } },
+        { type: "category", data: s.dates, gridIndex: 1, axisLabel: { show: false }, axisTick: { show: false }, axisLine: { show: false } },
+        { type: "category", data: s.dates, gridIndex: 2, axisLabel: { fontSize: 9, color: "#8a94a6" }, axisTick: { show: false }, axisLine: { lineStyle: { color: "#dde3ee" } } },
+      ],
+      yAxis: [
+        { scale: true, gridIndex: 0, splitLine: { lineStyle: { color: "#f1f4f9" } }, axisLabel: { fontSize: 10, color: "#8a94a6" } },
+        { scale: true, gridIndex: 1, splitLine: { show: false }, axisLabel: { show: false } },
+        { scale: true, gridIndex: 2, splitLine: { lineStyle: { color: "#f7f9fc" } }, axisLabel: { fontSize: 9, color: "#8a94a6" } },
+      ],
+      dataZoom: [{ type: "inside", xAxisIndex: [0, 1, 2], start: 50, end: 100 }],
+      series: [
+        { name: "K线", type: "candlestick", data: s.ohlc, xAxisIndex: 0, yAxisIndex: 0,
+          itemStyle: { color: up, color0: down, borderColor: up, borderColor0: down } },
+        { name: "白线", type: "line", data: s.white, xAxisIndex: 0, yAxisIndex: 0, showSymbol: false, lineStyle: { width: 1.2, color: "#1b2436" } },
+        { name: "黄线", type: "line", data: s.yellow, xAxisIndex: 0, yAxisIndex: 0, showSymbol: false, connectNulls: false, lineStyle: { width: 1.4, color: "#d4a017" } },
+        { name: "成交量", type: "bar", data: volData, xAxisIndex: 1, yAxisIndex: 1, barWidth: "55%" },
+        { name: "K", type: "line", data: s.k, xAxisIndex: 2, yAxisIndex: 2, showSymbol: false, lineStyle: { width: 1, color: "#1b2436" } },
+        { name: "D", type: "line", data: s.d, xAxisIndex: 2, yAxisIndex: 2, showSymbol: false, lineStyle: { width: 1, color: "#d4a017" } },
+        { name: "J", type: "line", data: s.j, xAxisIndex: 2, yAxisIndex: 2, showSymbol: false, lineStyle: { width: 1, color: "#e5343f" } },
+      ],
+    });
   }
 
   async function scan(force) {
@@ -102,5 +203,21 @@
 
   renderCats();
   $("btnEtfScan").addEventListener("click", () => scan(true));
+  $("etfChartClose").addEventListener("click", () => { $("etfChartPanel").hidden = true; });
+  $("etfChartPanel").addEventListener("contextmenu", (e) => {
+    e.preventDefault();
+    if (!chartCode) return;
+    const next = chartPeriod === "week" ? "day" : "week";
+    openEtfChart(chartCode, chartName, next, true);
+  });
+  document.addEventListener("keydown", (e) => {
+    if (e.key === "Escape") $("etfChartPanel").hidden = true;
+  });
+  window.addEventListener("resize", () => { if (chartInst) chartInst.resize(); });
+
+  const qs = new URLSearchParams(location.search);
+  if (qs.get("chart")) {
+    setTimeout(() => openEtfChart(qs.get("chart"), "", qs.get("period") || "week", true), 600);
+  }
   scan(false);
 })();

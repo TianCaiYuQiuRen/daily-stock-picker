@@ -62,7 +62,19 @@
       </div>
     </section>
   </main>
+
+  <div class="etf-chart-panel" id="etfChartPanel" hidden>
+    <div class="etf-chart-head">
+      <b id="etfChartName">--</b>
+      <span class="etf-period" id="etfChartPeriod">周K</span>
+      <span class="etf-chart-meta" id="etfChartMeta"></span>
+      <button class="close-btn" id="etfChartClose">×</button>
+    </div>
+    <div class="etf-chart-box" id="etfChartBox"></div>
+    <div class="etf-chart-tip">悬停查看周线 · 右键切换 周K / 日K · 滚轮缩放</div>
+  </div>
 </div>
+<script src="/echarts.min.js"></script>
 <script src="/etf.js"></script>
 </body>
 </html>
