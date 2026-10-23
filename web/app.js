@@ -1476,7 +1476,7 @@
 
   async function loadAmv() {
     try {
-      const d = await api("/api/amv?days=160");
+      const d = await api("/api/amv?days=120");
       if (!d.ok) {
         $("amvCard").hidden = false;
         $("amvSub").textContent = d.error || "暂无数据";
@@ -1492,15 +1492,15 @@
     const chg = $("amvChg");
     chg.textContent = (d.chg >= 0 ? "+" : "") + Number(d.chg).toFixed(2) + "%";
     chg.className = "amv-chg " + (d.chg >= 0 ? "up" : "down");
-    let sub = "更新 " + d.last_date + " · 沪深成交额 10 日平滑 ÷ 1e7（通达信指数日线）";
+    let sub = "更新 " + d.last_date + " · 日K + EMA12 · 沪深成交额 10 日平滑 ÷ 1e7（通达信指数日线）";
     if (d.stale_days > 1) sub += " · 数据滞后 " + d.stale_days + " 天";
     $("amvSub").textContent = sub;
 
-    const color = d.chg >= 0 ? "#e5343f" : "#0a9e6b";
     if (amvChart) { amvChart.dispose(); amvChart = null; }
     amvChart = echarts.init($("amvChart"));
     const dates = (d.series || []).map((x) => x.date);
-    const values = (d.series || []).map((x) => x.value);
+    const ohlc = (d.series || []).map((x) => [x.open, x.value, x.low, x.high]);
+    const fmt = (v) => Number(v).toLocaleString("zh-CN", { maximumFractionDigits: 1 });
     amvChart.setOption({
       animation: false,
       grid: { left: 8, right: 12, top: 10, bottom: 18, containLabel: true },
@@ -1508,10 +1508,14 @@
         trigger: "axis",
         backgroundColor: "rgba(27,36,54,.92)", borderWidth: 0,
         textStyle: { color: "#fff", fontSize: 12 },
-        formatter: (ps) => ps[0].axisValue + "<br/>0AMV " + Number(ps[0].data).toLocaleString("zh-CN"),
+        formatter: (ps) => {
+          const v = ps[0].data;
+          return ps[0].axisValue + "<br/>开 " + fmt(v[0]) + "<br/>收 " + fmt(v[1]) +
+            "<br/>高 " + fmt(v[3]) + "<br/>低 " + fmt(v[2]);
+        },
       },
       xAxis: {
-        type: "category", data: dates, boundaryGap: false,
+        type: "category", data: dates, boundaryGap: true,
         axisLabel: { fontSize: 10, color: "#9aa5b8", interval: Math.max(1, Math.floor(dates.length / 6)) },
         axisTick: { show: false }, axisLine: { lineStyle: { color: "#e3e9f3" } },
       },
@@ -1524,14 +1528,15 @@
         },
       },
       series: [{
-        name: "0AMV", type: "line", data: values, showSymbol: false, smooth: true,
-        lineStyle: { width: 2, color },
-        areaStyle: {
-          color: {
-            type: "linear", x: 0, y: 0, x2: 0, y2: 1,
-            colorStops: [{ offset: 0, color: color + "33" }, { offset: 1, color: color + "00" }],
-          },
+        name: "0AMV", type: "candlestick", data: ohlc, barMaxWidth: 6,
+        itemStyle: {
+          color: "#e5343f", color0: "#0a9e6b",
+          borderColor: "#e5343f", borderColor0: "#0a9e6b",
         },
+      }, {
+        name: "EMA12", type: "line", data: (d.series || []).map((x) => x.ema),
+        showSymbol: false, smooth: true, z: 3,
+        lineStyle: { width: 1.5, color: "#e6b800" },
       }],
     });
   }
@@ -1616,3 +1621,4 @@
 
   init();
 })();
+

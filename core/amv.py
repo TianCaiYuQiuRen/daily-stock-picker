@@ -55,7 +55,15 @@ def compute(days=160):
     for i, item in enumerate(series):
         prev = series[i - 1]["value"] if i else item["value"]
         item["open"] = prev
+        item["high"] = max(prev, item["value"])
+        item["low"] = min(prev, item["value"])
         item["chg"] = round((item["value"] / prev - 1.0) * 100.0, 2) if prev else 0.0
+
+    # EMA12 平滑线（参考实现里的“平滑线”）
+    ema = None
+    for item in series:
+        ema = item["value"] if ema is None else ema * 11.0 / 12.0 + item["value"] / 12.0
+        item["ema"] = round(ema, 1)
 
     last = series[-1]
     stale_days = 0

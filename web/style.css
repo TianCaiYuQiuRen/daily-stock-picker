@@ -1,4 +1,4 @@
-/* ===== 每日选股 · 简洁大字号界面 ===== */
+﻿/* ===== 每日选股 · 简洁大字号界面 ===== */
 :root {
   --bg: #f3f5fa;
   --card: #ffffff;
@@ -905,7 +905,7 @@ tbody tr.clickable:hover { background: #f7faff; }
 /* ---------- 0AMV active market value ---------- */
 .amv-card {
   display: flex; gap: 24px; align-items: stretch;
-  padding: 18px 22px; margin: 0 0 18px; min-height: 168px;
+  padding: 18px 22px; margin: 0 0 18px; min-height: 200px;
 }
 .amv-left { flex: 0 0 300px; display: flex; flex-direction: column; justify-content: center; min-width: 0; }
 .amv-title { font-size: 15px; font-weight: 700; color: #5b6b85; display: flex; align-items: center; gap: 6px; flex-wrap: wrap; }
@@ -921,10 +921,12 @@ tbody tr.clickable:hover { background: #f7faff; }
 .amv-chg.up { color: #e5343f; }
 .amv-chg.down { color: #0a9e6b; }
 .amv-sub { font-size: 12.5px; color: #9aa5b8; line-height: 1.6; }
-.amv-chart { flex: 1; min-width: 0; height: 168px; }
+.amv-chart { flex: 1; min-width: 0; height: 200px; }
 @media (max-width: 760px) {
   .amv-card { flex-direction: column; gap: 10px; padding: 14px; }
   .amv-left { flex: auto; }
   .amv-value b { font-size: 30px; }
   .amv-chart { height: 150px; }
 }
+
+
