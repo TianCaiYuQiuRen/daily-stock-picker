@@ -1505,6 +1505,19 @@
     const emas = rows.map((x) => x.ema);
     const chgMap = {};
     rows.forEach((x) => { chgMap[x.date] = x.chg; });
+
+    let tactic = "ok";
+    for (let i = 1; i < rows.length; i++) {
+      const c = Number(rows[i].chg || 0);
+      const p = Number(rows[i - 1].chg || 0);
+      if (c <= -2.3) tactic = "cut";
+      else if (c >= 4 || c + p >= 4) tactic = "ok";
+    }
+    const ruleEl = $("amvRuleStatus");
+    if (ruleEl) {
+      ruleEl.textContent = tactic === "cut" ? "少妇战法：逐步减仓" : "少妇战法：适用期";
+      ruleEl.className = "amv-rule-status " + tactic;
+    }
     const fmt = (v) => Number(v).toLocaleString("zh-CN", { maximumFractionDigits: 1 });
     const rangeFor = (start, end) => {
       const n = values.length;
