@@ -1,4 +1,4 @@
-﻿/* ===== 每日选股 前端逻辑 ===== */
+/* ===== 每日选股 前端逻辑 ===== */
 (function () {
   "use strict";
 
@@ -83,6 +83,29 @@
     if (v >= 1e8) return (v / 1e8).toFixed(2) + "亿";
     if (v >= 1e4) return (v / 1e4).toFixed(0) + "万";
     return Number(v).toFixed(0);
+  }
+
+  function chartTooltip(ps) {
+    if (!ps || !ps.length) return "";
+    const lines = [ps[0].axisValue];
+    ps.forEach((p) => {
+      if (p.seriesType === "scatter") return;
+      const raw = p.data;
+      if (p.seriesType === "candlestick") {
+        const v = raw || [];
+        lines.push("开 " + Number(v[0]).toFixed(2) + "　收 " + Number(v[1]).toFixed(2));
+        lines.push("高 " + Number(v[3]).toFixed(2) + "　低 " + Number(v[2]).toFixed(2));
+        return;
+      }
+      let v = raw && typeof raw === "object" && raw.value != null ? raw.value : raw;
+      if (v == null || isNaN(v)) return;
+      if (p.seriesName === "成交量") {
+        lines.push("成交量 " + fmtAmount(v));
+        return;
+      }
+      lines.push((p.marker || "") + p.seriesName + " " + Number(v).toFixed(2));
+    });
+    return lines.join("<br/>");
   }
 
   function fmtCap(v) {
@@ -956,7 +979,7 @@
       backgroundColor: "#ffffff",
       tooltip: { trigger: "axis", axisPointer: { type: "cross" },
         backgroundColor: "rgba(27,36,54,.92)", borderWidth: 0,
-        textStyle: { color: "#fff", fontSize: 12 } },
+        textStyle: { color: "#fff", fontSize: 12 }, formatter: chartTooltip },
       axisPointer: { link: [{ xAxisIndex: "all" }] },
       grid: [
         { left: 62, right: 20, top: 12, height: "46%" },
@@ -1224,7 +1247,7 @@
       backgroundColor: "#ffffff",
       tooltip: { trigger: "axis", axisPointer: { type: "cross" },
         backgroundColor: "rgba(27,36,54,.92)", borderWidth: 0,
-        textStyle: { color: "#fff", fontSize: 12 } },
+        textStyle: { color: "#fff", fontSize: 12 }, formatter: chartTooltip },
       axisPointer: { link: [{ xAxisIndex: "all" }] },
       grid: [
         { left: 62, right: 20, top: 12, height: "62%" },

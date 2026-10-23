@@ -1,4 +1,4 @@
-﻿/* ETF 选股页 */
+/* ETF 选股页 */
 (function () {
   const $ = (id) => document.getElementById(id);
   const CATS = [
@@ -145,6 +145,24 @@
         trigger: "axis", axisPointer: { type: "cross" },
         backgroundColor: "rgba(27,36,54,.92)", borderWidth: 0,
         textStyle: { color: "#fff", fontSize: 11 },
+        formatter: (ps) => {
+          const date = ps[0].axisValue;
+          const map = {};
+          ps.forEach((p) => { map[p.seriesName] = p.data; });
+          const out = [date];
+          const candle = map["K线"];
+          if (candle) {
+            out.push("开 " + Number(candle[0]).toFixed(3) + "　收 " + Number(candle[1]).toFixed(3));
+            out.push("高 " + Number(candle[3]).toFixed(3) + "　低 " + Number(candle[2]).toFixed(3));
+          }
+          ["白线", "黄线", "K", "D", "J"].forEach((n) => {
+            if (map[n] != null) out.push(n + " " + Number(map[n]).toFixed(2));
+          });
+          const volRaw = map["成交量"];
+          const vol = volRaw && typeof volRaw === "object" ? volRaw.value : volRaw;
+          if (vol != null) out.push("成交量 " + fmtAmt(vol));
+          return out.join("<br/>");
+        },
       },
       axisPointer: { link: [{ xAxisIndex: "all" }] },
       grid: [
