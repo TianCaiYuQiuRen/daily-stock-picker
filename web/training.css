@@ -99,6 +99,10 @@ kbd {
   padding: 8px 12px; border: 1px solid var(--line); border-radius: 999px;
   background: rgba(255, 255, 255, .75); color: var(--muted); font-size: 13.5px;
 }
+.tr-data-pill.stale { color: #c62834; background: #fff1f2; border-color: #ffd6d9; }
+.tr-data-pill.stale .live-dot { background: #e5343f; box-shadow: 0 0 0 4px rgba(229,52,63,.12); }
+.tr-data-pill.warn { color: #a86400; background: #fff7e8; border-color: #ffe3b0; }
+.tr-data-pill.warn .live-dot { background: #f0a020; box-shadow: 0 0 0 4px rgba(240,160,32,.12); }
 .live-dot {
   width: 6px; height: 6px; border-radius: 50%; background: #12b76a;
   box-shadow: 0 0 0 4px rgba(18, 183, 106, .12);
@@ -779,6 +783,8 @@ kbd {
 .book-page-jump { display: flex; align-items: center; gap: 6px; }
 .book-page-jump input { width: 64px; border: 1px solid var(--line); border-radius: 6px; padding: 4px 6px; font-family: var(--mono); font-size: 11px; text-align: center; color: var(--text); background: #fff; }
 .book-key-hint { font-family: var(--mono); }
+.book-progress { height: 3px; margin: 8px 4px 0; border-radius: 3px; background: #e9edf4; overflow: hidden; }
+.book-progress i { display: block; height: 100%; width: 0; border-radius: 3px; background: linear-gradient(90deg, #8fb1ff, #2f6bff); transition: width .2s; }
 .book-empty { padding: 30px; text-align: center; color: var(--muted); }
 .book-empty b { display: block; color: var(--ink); font-size: 15px; margin-bottom: 8px; }
 

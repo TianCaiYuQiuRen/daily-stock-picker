@@ -35,6 +35,11 @@
     </div>
   </header>
 
+  <section class="data-alert" id="dataAlert" hidden>
+    <div><b id="dataAlertTitle">数据提示</b><span id="dataAlertText"></span></div>
+    <button class="btn ghost small" id="btnDataHelp" type="button">查看/更新数据</button>
+  </section>
+
   <main>
     <section class="hero card">
       <div class="hero-main">
@@ -77,6 +82,15 @@
       <div class="meta" id="metaText">尚未选股</div>
     </section>
 
+    <section class="perf-strip" id="perfStrip" hidden>
+      <div class="perf-title">
+        <b>近 20 期信号表现</b>
+        <span id="perfSample">--</span>
+      </div>
+      <div class="perf-metrics" id="perfMetrics"></div>
+      <button class="btn ghost small" id="btnPerfHistory" type="button">看历史明细</button>
+    </section>
+
     <section class="amv-card card" id="amvCard" hidden>
       <div class="amv-left">
         <div class="amv-title">活跃市值 <span>0AMV</span><em>民间公式代理</em></div>
@@ -92,6 +106,17 @@
 
     <section class="content">
       <div class="card table-card">
+        <div class="table-tools" id="tableTools" hidden>
+          <div class="table-search">
+            <input id="tableSearch" type="search" placeholder="搜索代码 / 名称 / 信号">
+            <span id="tableCount"></span>
+          </div>
+          <div class="table-mode" id="tableMode">
+            <button data-mode="focus" class="active" type="button">重点 10</button>
+            <button data-mode="all" type="button">全部</button>
+          </div>
+        </div>
+        <div class="risk-note">信号仅供研究复盘，不构成投资建议；请结合数据截止时间、流动性和自身风险承受能力。</div>
         <div class="progress" id="progress" hidden>
           <div class="progress-bar"><i id="progressFill"></i></div>
           <div class="progress-text"><span id="progressText">正在准备…</span><span id="progressPct"></span></div>
@@ -100,9 +125,10 @@
           <table id="resultTable">
             <thead>
               <tr>
-                <th class="w-rank sortable" data-sort="score" title="综合评分，点击排序">#<span class="arrow"></span></th>
+                <th class="w-rank" title="按综合评分排名">#</th>
                 <th class="sortable" data-sort="code">代码<span class="arrow"></span></th>
                 <th class="sortable" data-sort="name">名称<span class="arrow"></span></th>
+                <th class="num sortable" data-sort="score" title="综合评分">评分<span class="arrow"></span></th>
                 <th class="num sortable" data-sort="price">现价<span class="arrow"></span></th>
                 <th class="num sortable" data-sort="pct">涨幅<span class="arrow"></span></th>
                 <th class="num sortable" data-sort="vol_ratio">量比<span class="arrow"></span></th>
@@ -244,6 +270,7 @@
     </div>
     <div id="chartBox"></div>
     <div class="chart-legend" id="chartLegend">K线 · 白线 · 黄线 · 成交量 · 战法指标</div>
+    <div class="trade-plan" id="chartPlan" hidden></div>
   </div>
 </div>
 

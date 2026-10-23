@@ -8,6 +8,17 @@
     ["index", "股指"],
   ];
   const state = { category: "all", items: [], busy: false, data: null };
+  const CACHE_KEY = "etf_scan_cache_v1";
+
+  function readCache() {
+    try {
+      const raw = JSON.parse(localStorage.getItem(CACHE_KEY) || "null");
+      return raw && raw.items && raw.category === state.category ? raw : null;
+    } catch (e) { return null; }
+  }
+  function writeCache(d) {
+    try { localStorage.setItem(CACHE_KEY, JSON.stringify(Object.assign({}, d, { cached_at: Date.now() }))); } catch (e) { /* ignore */ }
+  }
 
   function esc(v) {
     return String(v == null ? "" : v)
@@ -212,20 +223,42 @@
     state.busy = true;
     $("btnEtfScan").disabled = true;
     $("btnEtfScan").textContent = "筛选中…";
-    $("etfBody").innerHTML = '<tr><td colspan="10" class="etf-empty">正在筛选，约需 10 秒…</td></tr>';
+    $("etfBody").innerHTML = '<tr><td colspan="10" class="etf-empty">正在筛选，首次约需 10–30 秒…</td></tr>';
+    const cached = readCache();
+    const controller = new AbortController();
+    const started = Date.now();
+    let timeout = null;
+    const ticker = setInterval(() => {
+      const sec = ((Date.now() - started) / 1000).toFixed(0);
+      $("etfMeta").textContent = "正在筛选，已用 " + sec + " 秒…";
+    }, 1000);
     try {
       const url = "/api/etf/scan?category=" + encodeURIComponent(state.category) +
         (force ? "&refresh=1" : "");
-      const res = await fetch(url);
+      timeout = setTimeout(() => controller.abort(), 60000);
+      const res = await fetch(url, { signal: controller.signal });
       const d = await res.json();
       if (!d.ok) throw new Error(d.error || "筛选失败");
       state.data = d;
       state.items = d.items || [];
+      writeCache(d);
       render();
     } catch (e) {
-      $("etfBody").innerHTML = '<tr><td colspan="10" class="etf-empty">' + esc(e.message) + "</td></tr>";
-      $("etfMeta").textContent = "筛选失败";
+      const isTimeout = e && e.name === "AbortError";
+      if (cached) {
+        state.data = cached;
+        state.items = cached.items || [];
+        render();
+        $("etfMeta").textContent = "筛选失败" + (isTimeout ? "（超过60秒）" : "") +
+          "，当前显示上次缓存 · " + new Date(cached.cached_at || Date.now()).toLocaleString("zh-CN");
+      } else {
+        $("etfBody").innerHTML = '<tr><td colspan="10" class="etf-empty">' +
+          esc(isTimeout ? "筛选超时（60秒），请点「重新筛选」重试" : e.message) + "</td></tr>";
+        $("etfMeta").textContent = isTimeout ? "筛选超时" : "筛选失败";
+      }
     } finally {
+      clearInterval(ticker);
+      if (timeout) clearTimeout(timeout);
       state.busy = false;
       $("btnEtfScan").disabled = false;
       $("btnEtfScan").textContent = "重新筛选";

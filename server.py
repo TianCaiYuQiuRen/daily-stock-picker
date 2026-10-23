@@ -895,6 +895,14 @@ class Handler(BaseHTTPRequestHandler):
                         days.append(year * 10000 + mon * 100 + d)
             return self._json({"ok": True, "month": month, "days": days, "source": source})
 
+        if path == "/api/performance":
+            limit = (query.get("limit") or ["20"])[0]
+            try:
+                limit = int(limit)
+            except ValueError:
+                limit = 20
+            return self._json({"ok": True, **history.performance(limit, bars_for)})
+
         if path == "/api/history":
             rec_id = (query.get("id") or [""])[0].strip()
             if not rec_id:

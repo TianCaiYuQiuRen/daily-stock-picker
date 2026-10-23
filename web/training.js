@@ -1349,6 +1349,7 @@
       winRate: closed.length ? Number((wins / closed.length * 100).toFixed(2)) : 0,
       profitFactor: gl ? Number((gp / gl).toFixed(3)) : (gp > 0 ? 99 : 0),
       maxDD: Number(state.maxDD.toFixed(3)),
+      benchmarkPct: Number((sessionBenchmarkPct() || 0).toFixed(3)),
       code: info ? info.code : null,
       name: info ? info.name : null,
       startDate: info ? info.start_date : null,
@@ -1381,8 +1382,17 @@
     return { g: "D", cls: "grade-c" };
   }
 
+  function sessionBenchmarkPct() {
+    if (!state.session || !state.session.bars || state.session.bars.length < 2) return null;
+    const bars = state.session.bars.slice(0, Math.max(2, state.visible || 2));
+    const first = Number(bars[0].c);
+    const last = Number(bars[bars.length - 1].c);
+    return first ? (last / first - 1) * 100 : null;
+  }
+
   function showResultCard(reason, settled) {
     const ret = (state.equity / INITIAL_CAPITAL - 1) * 100;
+    const benchmark = sessionBenchmarkPct();
     const closed = state.trades.filter((t) => t.side === "sell");
     const wins = closed.filter((t) => t.pnl > 0).length;
     const grade = gradeFor(ret);
@@ -1400,6 +1410,8 @@
     gradeEl.className = "result-grade " + grade.cls;
     const items = [
       ["收益率", fmtPct(ret), pctClass(ret)],
+      ["买入持有", benchmark === null ? "--" : fmtPct(benchmark), benchmark === null ? "" : pctClass(benchmark)],
+      ["超额收益", benchmark === null ? "--" : fmtPct(ret - benchmark), benchmark === null ? "" : pctClass(ret - benchmark)],
       ["交易次数", closed.length + " 笔", ""],
       ["胜率", closed.length ? (wins / closed.length * 100).toFixed(0) + "%" : "--", ""],
       ["最大回撤", state.maxDD.toFixed(2) + "%", ""],
@@ -1856,12 +1868,14 @@
   function exportStats() {
     const sessions = state.stats.sessions || [];
     if (!sessions.length) { toast("还没有可以导出的记录"); return; }
-    const header = ["时间", "周期", "股票代码", "股票名称", "收益率%", "交易次数", "胜率%", "盈亏比", "最大回撤%", "是否完整", "开始日期", "结束日期"];
+    const header = ["时间", "周期", "股票代码", "股票名称", "收益率%", "基准收益%", "超额收益%", "交易次数", "胜率%", "盈亏比", "最大回撤%", "是否完整", "开始日期", "结束日期"];
     const lines = [header.join(",")];
     sessions.forEach((s) => {
+      const bench = s.benchmarkPct == null ? "" : s.benchmarkPct;
+      const excess = s.benchmarkPct == null ? "" : Number((s.returnPct - s.benchmarkPct).toFixed(3));
       const row = [
         new Date(s.ts).toLocaleString("zh-CN"), PERIOD_LABEL[s.period] || s.period,
-        s.code || "", s.name || "", s.returnPct, s.trades, s.winRate, s.profitFactor, s.maxDD,
+        s.code || "", s.name || "", s.returnPct, bench, excess, s.trades, s.winRate, s.profitFactor, s.maxDD,
         s.completed ? "是" : "否", s.startDate || "", s.endDate || "",
       ].map((v) => '"' + String(v === null || v === undefined ? "" : v).replace(/"/g, '""') + '"');
       lines.push(row.join(","));
@@ -1869,7 +1883,9 @@
     const blob = new Blob(["\ufeff" + lines.join("\r\n")], { type: "text/csv;charset=utf-8" });
     const a = document.createElement("a");
     a.href = URL.createObjectURL(blob);
-    a.download = "K线训练成绩_" + new Date().toISOString().slice(0, 10) + ".csv";
+    const now = new Date();
+    const stamp = now.getFullYear() + String(now.getMonth() + 1).padStart(2, "0") + String(now.getDate()).padStart(2, "0");
+    a.download = "K线训练成绩_" + stamp + ".csv";
     a.click();
     setTimeout(() => URL.revokeObjectURL(a.href), 1000);
   }
@@ -1884,6 +1900,26 @@
     toast("训练数据已清空");
   }
 
+  async function refreshTrainingDataStatus() {
+    try {
+      const h = await api("/api/health");
+      const f = h.freshness || {};
+      const d = f.last_date ? String(f.last_date) : "";
+      const dateText = d.length === 8 ? d.slice(0, 4) + "-" + d.slice(4, 6) + "-" + d.slice(6, 8) : d;
+      const el = $("dataPillText");
+      if (!el) return;
+      if (f.level === "stale") {
+        el.textContent = "历史数据截至 " + dateText + (f.lag ? " · 滞后" + f.lag + "天" : "");
+        el.parentElement.classList.add("stale");
+      } else if (f.level === "warn") {
+        el.textContent = "历史数据截至 " + dateText;
+        el.parentElement.classList.add("warn");
+      } else {
+        el.textContent = "历史数据就绪";
+      }
+    } catch (e) { /* keep static text */ }
+  }
+
   /* ---------------------------------------------------------------
      启动
   --------------------------------------------------------------- */
@@ -1891,6 +1927,7 @@
     bindTraining();
     syncIndicatorControls();
     refreshHero();
+    refreshTrainingDataStatus();
     $("btnExportStats").addEventListener("click", exportStats);
     $("btnResetStats").addEventListener("click", resetStats);
     $("btnClearTrain").addEventListener("click", resetStats);

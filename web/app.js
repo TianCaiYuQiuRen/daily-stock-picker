@@ -19,6 +19,10 @@
     strategyList: [],
     sort: { key: "score", dir: -1 },
     share: { running: false },
+    tableQuery: "",
+    tableMode: "focus",
+    perf: null,
+    chartItem: null,
   };
 
   let pollTimer = null;
@@ -330,6 +334,39 @@
     $("statTime").textContent = r ? (r.elapsed + "s") : "--";
   }
 
+  async function loadPerformance() {
+    try {
+      const d = await api("/api/performance?limit=20");
+      state.perf = d;
+      const sum = d.summary || {};
+      const usable = ["r1", "r3", "r5", "r10"].some((k) => sum[k] && sum[k].count);
+      const strip = $("perfStrip");
+      if (!strip) return;
+      if (!d.records) { strip.hidden = true; return; }
+      strip.hidden = false;
+      $("perfSample").textContent = "最近 " + d.records + " 期 · " + d.signals + " 个信号 · 最近信号 " +
+        (d.latest_date ? String(d.latest_date).replace(/^(\d{4})(\d{2})(\d{2})$/, "$1-$2-$3") : "--");
+      if (!usable) {
+        $("perfMetrics").innerHTML = '<div class="perf-metric"><small>后续表现</small><b>--</b><small>等待日线更新后统计 T+1 / T+5</small></div>';
+        return;
+      }
+      const items = [
+        ["r1", "T+1 平均"], ["r3", "T+3 平均"], ["r5", "T+5 平均"], ["r10", "T+10 平均"],
+      ];
+      $("perfMetrics").innerHTML = items.map(([k, label]) => {
+        const s = sum[k] || {};
+        const v = s.avg;
+        const cls = v > 0 ? "up" : v < 0 ? "down" : "";
+        return '<div class="perf-metric"><small>' + label + '</small><b class="' + cls + '">' +
+          (v == null ? "--" : (v > 0 ? "+" : "") + Number(v).toFixed(2) + "%") +
+          '</b><small>胜率 ' + (s.win == null ? "--" : s.win + "%") + " · n=" + (s.count || 0) + "</small></div>";
+      }).join("");
+    } catch (e) {
+      const strip = $("perfStrip");
+      if (strip) strip.hidden = true;
+    }
+  }
+
   function renderMeta() {
     const r = state.result;
     if (!r) {
@@ -363,8 +400,16 @@
     const body = $("resultBody");
     const empty = $("empty");
     const raw = (r && r.items) || [];
-    const items = sortItems(raw);
+    const q = (state.tableQuery || "").trim().toLowerCase();
+    let items = sortItems(raw).filter((it) => {
+      if (!q) return true;
+      return (String(it.code || "") + String(it.name || "") + (it.tags || []).join("")).toLowerCase().includes(q);
+    });
+    const total = items.length;
+    if (state.tableMode === "focus" && items.length > 10) items = items.slice(0, 10);
 
+    $("tableTools").hidden = !raw.length;
+    $("tableCount").textContent = raw.length ? "显示 " + items.length + " / " + total + " 只" : "";
     if (!raw.length) {
       body.innerHTML = "";
       empty.hidden = false;
@@ -380,6 +425,11 @@
     empty.hidden = true;
     $("btnExport").disabled = false;
     setWriteEnabled(state.canWrite);
+    if (!items.length) {
+      body.innerHTML = '<tr><td colspan="11" class="table-no-match">没有匹配的股票，换个关键词或切到「全部」。</td></tr>';
+      updateSortHeaders();
+      return;
+    }
 
     const html = items.map((it, idx) => {
       const pctCls = pctClass(it.pct);
@@ -391,6 +441,7 @@
         '<td class="rank">' + (idx + 1) + "</td>" +
         '<td class="code">' + esc(it.code) + "</td>" +
         '<td class="name">' + esc(it.name) + "</td>" +
+        '<td class="num score">' + (Number.isFinite(Number(it.score)) ? Number(it.score).toFixed(1) : "--") + "</td>" +
         '<td class="num price">' + fmtPrice(it.price) + "</td>" +
         '<td class="num"><span class="pct ' + pctCls + '">' + fmtPct(it.pct) + "</span></td>" +
         '<td class="num vol-ratio">' + fmtRatio(it.vol_ratio) + "</td>" +
@@ -481,6 +532,18 @@
     const dateText = d.length === 8 ? d.slice(0, 4) + "-" + d.slice(4, 6) + "-" + d.slice(6, 8) : d;
     const label = f.source === "online" ? "在线 " : "日线 ";
     $("dataText").textContent = label + dateText + (f.lag ? " · 滞后 " + f.lag + " 天" : "");
+    const alert = $("dataAlert");
+    if (alert) {
+      if (f.level === "stale" || f.level === "warn") {
+        alert.hidden = false;
+        $("dataAlertTitle").textContent = f.level === "stale" ? "日线数据已过期" : "日线数据偏旧";
+        $("dataAlertText").textContent = "当前日线为 " + dateText +
+          (f.lag ? "，滞后 " + f.lag + " 天" : "") +
+          "。今日结果只能作为历史快照，写入板块已禁用；请先更新通达信盘后数据。";
+      } else {
+        alert.hidden = true;
+      }
+    }
   }
 
   async function showHealth() {
@@ -908,6 +971,19 @@
     $("historyModal").addEventListener("click", (e) => { if (e.target.id === "historyModal") closeHistoryModal(); });
     $("btnSettings").addEventListener("click", openDrawer);
     $("dataPill").addEventListener("click", showHealth);
+    $("btnDataHelp").addEventListener("click", showHealth);
+    $("tableSearch").addEventListener("input", (e) => {
+      state.tableQuery = e.target.value || "";
+      renderTable();
+    });
+    $("tableMode").addEventListener("click", (e) => {
+      const b = e.target.closest("button[data-mode]");
+      if (!b) return;
+      state.tableMode = b.dataset.mode;
+      document.querySelectorAll("#tableMode button").forEach((x) => x.classList.toggle("active", x === b));
+      renderTable();
+    });
+    $("btnPerfHistory").addEventListener("click", openHistory);
     $("btnCloseDrawer").addEventListener("click", closeDrawer);
     $("overlay").addEventListener("click", closeDrawer);
     $("btnCancelSettings").addEventListener("click", closeDrawer);
@@ -947,7 +1023,47 @@
   /* ---------- K线图 ---------- */
   let chartInstance = null;
 
+  function renderTradePlan(it) {
+    const box = $("chartPlan");
+    if (!box) return;
+    if (!it) { box.hidden = true; box.innerHTML = ""; return; }
+    const price = Number(it.price) || 0;
+    const ma10 = Number(it.ma10);
+    const low = Number(it.low);
+    if (!price) { box.hidden = true; return; }
+    let stop = Math.min(
+      Number.isFinite(low) && low > 0 ? low * 0.995 : price * 0.96,
+      Number.isFinite(ma10) && ma10 > 0 ? ma10 * 0.985 : price * 0.96
+    );
+    stop = Math.max(stop, price * 0.92);
+    if (stop >= price) stop = price * 0.96;
+    const risk = price - stop;
+    const target = price + risk * 2;
+    const riskPct = risk / price * 100;
+    const riskBudget = 1000000 * 0.01;
+    let shares = Math.floor(riskBudget / Math.max(risk, 0.01) / 100) * 100;
+    shares = Math.min(shares, Math.floor(300000 / price / 100) * 100);
+    const posPct = shares * price / 1000000 * 100;
+    const pctCls = (v) => v > 0 ? "up" : v < 0 ? "down" : "";
+    box.innerHTML =
+      '<div class="trade-plan-head"><b>参考交易计划</b><span>按信号价 ' + fmtPrice(price) +
+      ' 计算 · 单笔风险预算 1% · 数据截至 ' + esc(it.last_bar || "--") + "</span></div>" +
+      '<div class="trade-plan-grid">' +
+      '<div class="trade-plan-item"><small>参考买点</small><b>' + fmtPrice(price) + "</b></div>" +
+      '<div class="trade-plan-item"><small>止损参考</small><b class="down">' + fmtPrice(stop) + " (-" + riskPct.toFixed(1) + "%)</b></div>" +
+      '<div class="trade-plan-item"><small>目标 2R</small><b class="up">' + fmtPrice(target) + "</b></div>" +
+      '<div class="trade-plan-item"><small>建议仓位</small><b>' + (shares ? shares + " 股 · " + posPct.toFixed(1) + "%" : "--") + "</b></div>" +
+      '<div class="trade-plan-item"><small>盈亏比</small><b>1 : 2</b></div>' +
+      "</div>" +
+      '<div class="trade-plan-note">失效条件：收盘跌破止损价，或 3 个交易日不能站稳 MA10，或量能明显萎缩。' +
+      " 以上为规则化参考，不是投资建议；请结合数据截止时间和自身仓位管理。</div>";
+    box.hidden = false;
+  }
+
   function openChart(code) {
+    const item = ((state.result && state.result.items) || []).find((x) => x.code === code);
+    state.chartItem = item || null;
+    renderTradePlan(item);
     $("chartModal").hidden = false;
     $("chartName").textContent = code;
     $("chartMeta").textContent = "加载中…";
@@ -1716,6 +1832,7 @@
       initBoards();
       applyMode();
       renderAll();
+      loadPerformance();
       if (state.share && state.share.running) $("btnShare").textContent = "分享中";
       if (location.hash === "#share" && !state.remote) openShare();
       try {

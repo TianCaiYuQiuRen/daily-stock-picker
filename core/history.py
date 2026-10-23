@@ -25,6 +25,7 @@ def save(result):
     data = {
         "id": rec_id,
         "date": date,
+        "market_date": result.get("market_date") or date,
         "generated_at": result.get("generated_at"),
         "strategy": result.get("strategy"),
         "boards": result.get("boards"),
@@ -89,7 +90,7 @@ def load(rec_id):
 
 def with_returns(record, bars_getter):
     items = record.get("items") or []
-    date = int(record.get("date") or 0)
+    date = int(record.get("market_date") or record.get("date") or 0)
     horizons = (1, 3, 5, 10)
     sums = {n: 0.0 for n in horizons}
     wins = {n: 0 for n in horizons}
@@ -98,9 +99,11 @@ def with_returns(record, bars_getter):
     for it in items:
         bars = bars_getter(it.get("market"), it.get("code")) or []
         idx = None
+        # 以信号日或之前最近一个交易日为起点；旧数据滞后时也能统计
         for i, b in enumerate(bars):
-            if b[0] == date:
+            if b[0] <= date:
                 idx = i
+            else:
                 break
         entry = bars[idx][4] if idx is not None else it.get("price")
         row = {"code": it.get("code"), "name": it.get("name"),
@@ -129,3 +132,44 @@ def with_returns(record, bars_getter):
         "generated_at": record.get("generated_at"),
         "strategy": record.get("strategy"), "count": record.get("count"),
     }, "items": out, "summary": summary}
+
+
+_PERF_CACHE = {}
+
+
+def performance(limit=20, bars_getter=None, force=False):
+    """近 N 期选股信号的 T+1/3/5/10 汇总表现。"""
+    limit = max(1, min(60, int(limit or 20)))
+    now = time.time()
+    cached = _PERF_CACHE.get(limit)
+    if not force and cached and now - cached.get("ts", 0) < 900:
+        return cached.get("data")
+    records = list_records()[:limit]
+    rows = []
+    for meta in records:
+        try:
+            rec = load(meta.get("id"))
+            data = with_returns(rec, bars_getter)
+        except (OSError, ValueError, TypeError):
+            continue
+        for it in data.get("items") or []:
+            it["record_date"] = data.get("record", {}).get("date")
+            it["record_id"] = data.get("record", {}).get("id")
+            rows.append(it)
+    summary = {}
+    for n in (1, 3, 5, 10):
+        vals = [it["r%d" % n] for it in rows if it.get("r%d" % n) is not None]
+        summary["r%d" % n] = {
+            "avg": round(sum(vals) / len(vals), 2) if vals else None,
+            "win": round(sum(1 for v in vals if v > 0) * 100.0 / len(vals), 1) if vals else None,
+            "count": len(vals),
+        }
+    dates = [int(m.get("date") or 0) for m in records if m.get("date")]
+    data = {
+        "records": len(records),
+        "signals": len(rows),
+        "latest_date": max(dates) if dates else 0,
+        "summary": summary,
+    }
+    _PERF_CACHE[limit] = {"ts": now, "data": data}
+    return data

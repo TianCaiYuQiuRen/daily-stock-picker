@@ -60,6 +60,8 @@
     $("bookPageTitle").textContent = ch ? ch.title : "电子书";
     $("bookPageSub").textContent = sec ? sec.title : "本章开始";
     $("bookZoomLabel").textContent = S.zoom + "%";
+    if (total) $("bookProgressFill").style.width = (S.current / total * 100).toFixed(1) + "%";
+    try { localStorage.setItem("book_last_page", String(S.current)); } catch (e) { /* ignore */ }
     S.activeChapter = ch ? ch.id : null;
     syncOutlineActive();
   }
@@ -156,7 +158,9 @@
       S.loaded = true;
       renderOutline();
       const hash = (location.hash || "").match(/^#book\/(\d+)/);
-      loadPage(hash ? Number(hash[1]) : 1, false);
+      let saved = 1;
+      try { saved = Number(localStorage.getItem("book_last_page") || 1) || 1; } catch (e) { /* ignore */ }
+      loadPage(hash ? Number(hash[1]) : saved, false);
     } catch (err) {
       $("bookOutline").innerHTML = "";
       $("bookPageTitle").textContent = "电子书还没有生成";
