@@ -85,16 +85,22 @@
     return Number(v).toFixed(0);
   }
 
-  function chartTooltip(ps) {
+  function chartTooltip(ps, ohlc) {
     if (!ps || !ps.length) return "";
     const lines = [ps[0].axisValue];
     ps.forEach((p) => {
       if (p.seriesType === "scatter") return;
       const raw = p.data;
       if (p.seriesType === "candlestick") {
-        const v = raw || [];
-        lines.push("开 " + Number(v[0]).toFixed(2) + "　收 " + Number(v[1]).toFixed(2));
-        lines.push("高 " + Number(v[3]).toFixed(2) + "　低 " + Number(v[2]).toFixed(2));
+        const row = (ohlc && ohlc[p.dataIndex]) || raw || [];
+        lines.push("开 " + Number(row[0]).toFixed(2) + "　收 " + Number(row[1]).toFixed(2));
+        lines.push("高 " + Number(row[3]).toFixed(2) + "　低 " + Number(row[2]).toFixed(2));
+        if (ohlc && ohlc[p.dataIndex]) {
+          const idx = p.dataIndex;
+          const prev = idx > 0 ? ohlc[idx - 1][1] : Number(row[1]);
+          const ret = prev ? (Number(row[1]) / prev - 1) * 100 : 0;
+          lines.push("收益率 " + (ret > 0 ? "+" : "") + ret.toFixed(2) + "%");
+        }
         return;
       }
       let v = raw && typeof raw === "object" && raw.value != null ? raw.value : raw;
@@ -979,7 +985,7 @@
       backgroundColor: "#ffffff",
       tooltip: { trigger: "axis", axisPointer: { type: "cross" },
         backgroundColor: "rgba(27,36,54,.92)", borderWidth: 0,
-        textStyle: { color: "#fff", fontSize: 12 }, formatter: chartTooltip },
+        textStyle: { color: "#fff", fontSize: 12 }, formatter: (ps) => chartTooltip(ps, s.ohlc) },
       axisPointer: { link: [{ xAxisIndex: "all" }] },
       grid: [
         { left: 62, right: 20, top: 12, height: "46%" },
@@ -1247,7 +1253,7 @@
       backgroundColor: "#ffffff",
       tooltip: { trigger: "axis", axisPointer: { type: "cross" },
         backgroundColor: "rgba(27,36,54,.92)", borderWidth: 0,
-        textStyle: { color: "#fff", fontSize: 12 }, formatter: chartTooltip },
+        textStyle: { color: "#fff", fontSize: 12 }, formatter: (ps) => chartTooltip(ps, s.ohlc) },
       axisPointer: { link: [{ xAxisIndex: "all" }] },
       grid: [
         { left: 62, right: 20, top: 12, height: "62%" },

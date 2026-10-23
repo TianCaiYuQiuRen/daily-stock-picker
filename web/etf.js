@@ -151,9 +151,22 @@
           ps.forEach((p) => { map[p.seriesName] = p.data; });
           const out = [date];
           const candle = map["K线"];
-          if (candle) {
-            out.push("开 " + Number(candle[0]).toFixed(3) + "　收 " + Number(candle[1]).toFixed(3));
-            out.push("高 " + Number(candle[3]).toFixed(3) + "　低 " + Number(candle[2]).toFixed(3));
+          const idx = ps[0].dataIndex;
+          const row = (s.ohlc || [])[idx];
+          if (row) {
+            out.push("开 " + Number(row[0]).toFixed(3) + "　收 " + Number(row[1]).toFixed(3));
+            out.push("高 " + Number(row[3]).toFixed(3) + "　低 " + Number(row[2]).toFixed(3));
+            const closes = s.ohlc.map((x) => x[1]);
+            const close = closes[idx];
+            const prev = idx > 0 ? closes[idx - 1] : close;
+            const barRet = prev ? (close / prev - 1) * 100 : 0;
+            let startPct = 0;
+            try { startPct = Number((chartInst.getOption().dataZoom || [])[0].start) || 0; } catch (e) { /* ignore */ }
+            const si = Math.max(0, Math.min(closes.length - 1, Math.floor(closes.length * startPct / 100)));
+            const base = closes[si] || close;
+            const rangeRet = base ? (close / base - 1) * 100 : 0;
+            const pct = (v) => (v > 0 ? "+" : "") + Number(v).toFixed(2) + "%";
+            out.push("收益率 " + pct(barRet) + "　可见区间 " + pct(rangeRet));
           }
           ["白线", "黄线", "K", "D", "J"].forEach((n) => {
             if (map[n] != null) out.push(n + " " + Number(map[n]).toFixed(2));
