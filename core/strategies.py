@@ -1,4 +1,4 @@
-# -*- coding: utf-8 -*-
+﻿# -*- coding: utf-8 -*-
 """选股战法定义。
 
 三个战法对应三个选项：
@@ -130,7 +130,7 @@ class FourTypes(Strategy):
         if f["near_support"] > p["near_line"]:
             return False, 0.0, []
 
-        tags = [self._type(f), "J=%.1f" % f["kdj_j"], "地量"]
+        tags = [self._type(f), "J=%.2f" % f["kdj_j"], "地量"]
         score = (60.0 + (p["j_max"] - f["kdj_j"]) * 1.5
                  + (p["shrink_peak"] - f["vol_ratio_peak"]) * 30.0
                  + (p["near_line"] - f["near_support"]) * 2.0)
@@ -205,7 +205,7 @@ class Shaofu(Strategy):
         if abs(f["pct_1445"]) >= p["pct_abs_max"]:
             return False, 0.0, []
 
-        tags = ["白上黄", "J=%.1f" % f["kdj_j"], "14:45 平稳"]
+        tags = ["白上黄", "J=%.2f" % f["kdj_j"], "14:45 平稳"]
         score = 30.0 - f["kdj_j"] * 0.5 + max(0.0, p["pct_abs_max"] - abs(f["pct_1445"])) * 3.0
         return True, round(score, 2), tags
 
@@ -236,3 +236,4 @@ def get_strategy(key, overrides=None):
         except (TypeError, ValueError):
             continue
     return s
+

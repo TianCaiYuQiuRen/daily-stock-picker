@@ -1,4 +1,4 @@
-# -*- coding: utf-8 -*-
+﻿# -*- coding: utf-8 -*-
 """主力出货评分（依据《主力出货的5种方式》）。
 
 所有判断只用「当天及以前」的数据，逐根 K 线滚动计算，
@@ -194,7 +194,7 @@ def evaluate(series):
         if p20 > 40:
             add("涨幅过大", "20 日涨幅 %.0f%%，位置偏高" % p20, 8)
     if j is not None and j > 100:
-        add("KDJ超买", "KDJ 的 J=%.0f，超买" % j, 5)
+        add("KDJ超买", "KDJ 的 J=%.2f，超买" % j, 5)
 
     # 放量滞涨 / 高位长上影
     if len(ohlc) >= 2:
@@ -229,3 +229,4 @@ def evaluate(series):
         "markers": markers,
         "signal_count": len(signals),
     }
+

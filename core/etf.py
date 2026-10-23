@@ -1,4 +1,4 @@
-# -*- coding: utf-8 -*-
+﻿# -*- coding: utf-8 -*-
 """ETF 选股：周 K + 少妇战法条件；按名称/跟踪指数分纯血、混血、股指。
 
 说明：ETF 持仓与行业归属没有公开稳定的本地数据，这里按基金名称/跟踪指数
@@ -250,7 +250,7 @@ def _scan_all(min_weeks=120, pct_abs_max=2.45):
             continue
         if abs(weekly_pct) >= pct_abs_max:
             continue
-        tags = list(sectors) + ["J=%.1f" % f["kdj_j"]]
+        tags = list(sectors) + ["J=%.2f" % f["kdj_j"]]
         score = 30.0 - f["kdj_j"] * 0.5 + (pct_abs_max - abs(weekly_pct)) * 3.0
         items.append({
             "market": market,
@@ -259,7 +259,7 @@ def _scan_all(min_weeks=120, pct_abs_max=2.45):
             "price": q.get("price", 0),
             "pct": q.get("pct", 0),
             "weekly_pct": round(weekly_pct, 2),
-            "j": round(f["kdj_j"], 1),
+            "j": round(f["kdj_j"], 2),
             "amount": q.get("amount", 0),
             "kind": kind,
             "kind_label": {"pure": "纯血", "mixed": "混血", "index": "股指"}[kind],
@@ -306,3 +306,4 @@ def scan(category="all", min_weeks=120, pct_abs_max=2.45, force=False):
         "elapsed": _CACHE["elapsed"],
         "generated_at": _CACHE["generated_at"],
     }
+

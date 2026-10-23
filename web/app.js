@@ -1,4 +1,4 @@
-/* ===== 每日选股 前端逻辑 ===== */
+﻿/* ===== 每日选股 前端逻辑 ===== */
 (function () {
   "use strict";
 
@@ -1488,7 +1488,7 @@
 
   function renderAmv(d) {
     $("amvCard").hidden = false;
-    $("amvValue").textContent = Number(d.value).toLocaleString("zh-CN", { maximumFractionDigits: 1 });
+    $("amvValue").textContent = Number(d.value).toLocaleString("zh-CN", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
     const chg = $("amvChg");
     chg.textContent = (d.chg >= 0 ? "+" : "") + Number(d.chg).toFixed(2) + "%";
     chg.className = "amv-chg " + (d.chg >= 0 ? "up" : "down");
@@ -1518,7 +1518,7 @@
       ruleEl.textContent = tactic === "cut" ? "少妇战法：逐步减仓" : "少妇战法：适用期";
       ruleEl.className = "amv-rule-status " + tactic;
     }
-    const fmt = (v) => Number(v).toLocaleString("zh-CN", { maximumFractionDigits: 1 });
+    const fmt = (v) => Number(v).toLocaleString("zh-CN", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
     const rangeFor = (start, end) => {
       const n = values.length;
       const s = Math.max(0, Math.floor((n * start) / 100));
@@ -1560,7 +1560,7 @@
         splitLine: { lineStyle: { color: "#f1f4f9" } },
         axisLabel: {
           fontSize: 10, color: "#9aa5b8",
-          formatter: (v) => (v >= 10000 ? (v / 10000).toFixed(1) + "万" : v),
+          formatter: (v) => (v >= 10000 ? (v / 10000).toFixed(2) + "万" : Number(v).toFixed(2)),
         },
       },
       dataZoom: [
@@ -1670,4 +1670,5 @@
 
   init();
 })();
+
 

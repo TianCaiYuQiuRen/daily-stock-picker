@@ -1,4 +1,4 @@
-/* ETF 选股页 */
+﻿/* ETF 选股页 */
 (function () {
   const $ = (id) => document.getElementById(id);
   const CATS = [
@@ -67,7 +67,7 @@
         '<td class="num"><span class="pct ' + (up ? "up" : "down") + '">' +
         signed(it.pct, 2) + "%</span></td>" +
         '<td class="num ' + (wup ? "up" : "down") + '">' + signed(it.weekly_pct, 2) + "%</td>" +
-        '<td class="num">' + Number(it.j || 0).toFixed(1) + "</td>" +
+        '<td class="num">' + Number(it.j || 0).toFixed(2) + "</td>" +
         '<td><span class="etf-kind ' + it.kind + '">' + esc(it.kind_label) + "</span></td>" +
         '<td class="etf-sector">' + esc((it.sectors || []).join(" + ") || "-") + "</td>" +
         '<td class="num">' + fmtAmt(it.amount) + "</td>" +
@@ -221,3 +221,4 @@
   }
   scan(false);
 })();
+

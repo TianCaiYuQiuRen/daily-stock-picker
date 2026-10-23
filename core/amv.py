@@ -1,4 +1,4 @@
-# -*- coding: utf-8 -*-
+﻿# -*- coding: utf-8 -*-
 """0AMV 活跃市值（活筹指数）代理指标。
 
 指南针未公开原版算法；这里按公开流传的民间公式：
@@ -50,7 +50,7 @@ def compute(days=160):
             y = x
         else:
             y = (SMA_M * x + (SMA_N - SMA_M) * y) / SMA_N
-        series.append({"date": _fmt_date(d), "value": round(y, 1)})
+        series.append({"date": _fmt_date(d), "value": round(y, 2)})
 
     for i, item in enumerate(series):
         prev = series[i - 1]["value"] if i else item["value"]
@@ -63,7 +63,7 @@ def compute(days=160):
     ema = None
     for item in series:
         ema = item["value"] if ema is None else ema * 11.0 / 12.0 + item["value"] / 12.0
-        item["ema"] = round(ema, 1)
+        item["ema"] = round(ema, 2)
 
     last = series[-1]
     stale_days = 0
@@ -84,3 +84,4 @@ def compute(days=160):
         "stale_days": stale_days,
         "series": series[-days:],
     }
+
