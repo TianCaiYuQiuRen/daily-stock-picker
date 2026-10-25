@@ -1,4 +1,4 @@
-﻿/* ===== 每日选股 前端逻辑 ===== */
+/* ===== 每日选股 前端逻辑 ===== */
 (function () {
   "use strict";
 
@@ -982,6 +982,12 @@
     $("historyModal").addEventListener("click", (e) => { if (e.target.id === "historyModal") closeHistoryModal(); });
     $("btnSettings").addEventListener("click", openDrawer);
     $("dataPill").addEventListener("click", showHealth);
+    $("btnAmvManual").addEventListener("click", openAmvManual);
+    $("btnAmvManualCancel").addEventListener("click", () => { $("amvManualModal").hidden = true; });
+    $("btnAmvManualSave").addEventListener("click", saveAmvManual);
+    $("amvManualModal").addEventListener("click", (e) => {
+      if (e.target.id === "amvManualModal") $("amvManualModal").hidden = true;
+    });
     $("btnDataHelp").addEventListener("click", showHealth);
     $("tableSearch").addEventListener("input", (e) => {
       state.tableQuery = e.target.value || "";
@@ -1020,7 +1026,8 @@
     });
     document.addEventListener("keydown", (e) => {
       if (e.key === "Escape") {
-        if (!$("checkinModal").hidden) closeCheckin();
+        if (!$("amvManualModal").hidden) $("amvManualModal").hidden = true;
+        else if (!$("checkinModal").hidden) closeCheckin();
         else if (!$("sellModal").hidden) closeSell();
         else if (!$("chartModal").hidden) closeChart();
         else if (!$("historyModal").hidden) closeHistoryModal();
@@ -1696,11 +1703,15 @@
 
   function renderAmv(d) {
     $("amvCard").hidden = false;
+    const manual = d.source === "manual";
+    $("amvSource").textContent = manual ? "官方录入" : "成交额代理";
     $("amvValue").textContent = Number(d.value).toLocaleString("zh-CN", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
     const chg = $("amvChg");
     chg.textContent = (d.chg >= 0 ? "+" : "") + Number(d.chg).toFixed(2) + "%";
     chg.className = "amv-chg " + (d.chg >= 0 ? "up" : "down");
-    let sub = "更新 " + d.last_date + " · 日K + EMA12 · 滚轮缩放 · 沪深成交额 10 日平滑 ÷ 1e7（通达信指数日线）";
+    let sub = manual
+      ? "更新 " + d.last_date + " · 官方录入 " + (d.count || (d.series || []).length) + " 条 · 日K + EMA12"
+      : "更新 " + d.last_date + " · 日K + EMA12 · 滚轮缩放 · 沪深成交额 10 日平滑 ÷ 1e7（通达信指数日线）";
     if (d.stale_days > 1) sub += " · 数据滞后 " + d.stale_days + " 个交易日";
     $("amvSub").textContent = sub;
 
@@ -1709,6 +1720,8 @@
     const rows = d.series || [];
     const dates = rows.map((x) => x.date);
     const values = rows.map((x) => x.value);
+    const highs = rows.map((x) => (x.high != null ? x.high : x.value));
+    const lows = rows.map((x) => (x.low != null ? x.low : x.value));
     const ohlc = rows.map((x) => [x.open, x.value, x.low, x.high]);
     const emas = rows.map((x) => x.ema);
     const chgMap = {};
@@ -1723,17 +1736,24 @@
     }
     const ruleEl = $("amvRuleStatus");
     if (ruleEl) {
-      ruleEl.textContent = tactic === "cut" ? "少妇战法：逐步减仓" : "少妇战法：适用期";
-      ruleEl.className = "amv-rule-status " + tactic;
+      if (rows.length < 2) {
+        ruleEl.textContent = "少妇战法：需至少 2 天官方数据";
+        ruleEl.className = "amv-rule-status na";
+      } else {
+        ruleEl.textContent = (tactic === "cut" ? "少妇战法：逐步减仓" : "少妇战法：适用期") +
+          (manual ? "" : "（代理）");
+        ruleEl.className = "amv-rule-status " + tactic;
+      }
     }
     const fmt = (v) => Number(v).toLocaleString("zh-CN", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
     const rangeFor = (start, end) => {
       const n = values.length;
       const s = Math.max(0, Math.floor((n * start) / 100));
       const e = Math.min(n, Math.ceil((n * end) / 100));
-      const seg = values.slice(s, Math.max(s + 1, e));
-      const mn = Math.min(...seg);
-      const mx = Math.max(...seg);
+      const lo = lows.slice(s, Math.max(s + 1, e));
+      const hi = highs.slice(s, Math.max(s + 1, e));
+      const mn = Math.min(...lo);
+      const mx = Math.max(...hi);
       const pad = (mx - mn) * 0.08 || mx * 0.005;
       return [mn - pad, mx + pad];
     };
@@ -1796,6 +1816,74 @@
       const r = rangeFor(Number(dz.start || 0), Number(dz.end || 100));
       amvChart.setOption({ yAxis: { min: r[0], max: r[1] } });
     });
+  }
+
+  function amvToday() {
+    const f = state.freshness || {};
+    const d = f.last_date ? String(f.last_date) : "";
+    if (d.length === 8) return d.slice(0, 4) + "-" + d.slice(4, 6) + "-" + d.slice(6, 8);
+    const n = new Date();
+    return n.getFullYear() + "-" + String(n.getMonth() + 1).padStart(2, "0") + "-" +
+      String(n.getDate()).padStart(2, "0");
+  }
+
+  function openAmvManual() {
+    $("amvManualModal").hidden = false;
+    $("amvDate").value = amvToday();
+    ["amvClose", "amvChgInput", "amvOpen", "amvHigh", "amvLow"].forEach((id) => { $(id).value = ""; });
+    loadAmvManualList();
+    $("amvClose").focus();
+  }
+
+  async function loadAmvManualList() {
+    const box = $("amvManualList");
+    box.innerHTML = '<div class="amv-manual-item">加载中…</div>';
+    try {
+      const d = await api("/api/amv?days=30");
+      const entries = (d.entries || []).slice().reverse();
+      if (!entries.length) {
+        box.innerHTML = '<div class="amv-manual-item">还没有录入记录；保存第一条后切换为官方值</div>';
+        return;
+      }
+      box.innerHTML = entries.map((e) =>
+        '<div class="amv-manual-item"><span>' + esc(e.date) + " · " + Number(e.close).toFixed(2) + " · " +
+        (e.chg >= 0 ? "+" : "") + Number(e.chg).toFixed(2) + "%</span>" +
+        '<button data-date="' + esc(e.date) + '">删除</button></div>').join("");
+      box.querySelectorAll("button[data-date]").forEach((b) => {
+        b.addEventListener("click", () => deleteAmvManual(b.dataset.date));
+      });
+    } catch (e) { box.textContent = e.message; }
+  }
+
+  async function saveAmvManual() {
+    const payload = {
+      date: $("amvDate").value,
+      close: $("amvClose").value,
+      chg: $("amvChgInput").value,
+      open: $("amvOpen").value,
+      high: $("amvHigh").value,
+      low: $("amvLow").value,
+    };
+    if (!payload.date || !payload.close) { toast("日期和 0AMV 收盘必填"); return; }
+    try {
+      const r = await api("/api/amv/manual", { method: "POST", body: payload });
+      $("amvManualModal").hidden = true;
+      toast("已保存官方 0AMV");
+      if (r.amv) renderAmv(r.amv); else loadAmv();
+    } catch (e) {
+      showModal("保存失败", e.message);
+    }
+  }
+
+  async function deleteAmvManual(date) {
+    try {
+      const r = await api("/api/amv/manual", { method: "POST", body: { action: "delete", date } });
+      toast("已删除");
+      if (r.amv) renderAmv(r.amv); else loadAmv();
+      loadAmvManualList();
+    } catch (e) {
+      showModal("删除失败", e.message);
+    }
   }
 
   window.addEventListener("resize", () => { if (amvChart) amvChart.resize(); });

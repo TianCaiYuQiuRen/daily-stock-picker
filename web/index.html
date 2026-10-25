@@ -93,7 +93,9 @@
 
     <section class="amv-card card" id="amvCard" hidden>
       <div class="amv-left">
-        <div class="amv-title">活跃市值 <span>0AMV</span><em>民间公式代理</em></div>
+        <div class="amv-title">活跃市值 <span>0AMV</span><em id="amvSource">成交额代理</em>
+          <button type="button" class="amv-edit" id="btnAmvManual">录入官方值</button>
+        </div>
         <div class="amv-value"><b id="amvValue">--</b><small>点</small><i id="amvChg" class="amv-chg">--</i></div>
         <div class="amv-sub" id="amvSub">加载中…</div>
         <div class="amv-rule">
@@ -345,6 +347,30 @@
         </div>
         <div class="field-hint">打卡和盈亏只保存在本机浏览器，不上传服务器。</div>
       </div>
+    </div>
+  </div>
+</div>
+
+<div class="modal-wrap" id="amvManualModal" hidden>
+  <div class="modal amv-manual-modal">
+    <h3>录入指南针 0AMV</h3>
+    <p class="amv-manual-tip">从指南针手机/电脑端读取收盘值和涨跌幅。录入后，卡片、K 线和少妇战法规则都改用官方值；只保存在本机。</p>
+    <div class="field-row">
+      <div class="field"><label for="amvDate">日期</label><input id="amvDate" type="date"></div>
+      <div class="field"><label for="amvClose">0AMV 收盘</label><input id="amvClose" type="number" step="0.1" placeholder="如 143060.5"></div>
+    </div>
+    <div class="field-row">
+      <div class="field"><label for="amvChgInput">涨跌幅 %（可空）</label><input id="amvChgInput" type="number" step="0.01" placeholder="如 4.95"></div>
+      <div class="field"><label for="amvOpen">开盘（可空）</label><input id="amvOpen" type="number" step="0.1"></div>
+    </div>
+    <div class="field-row">
+      <div class="field"><label for="amvHigh">最高（可空）</label><input id="amvHigh" type="number" step="0.1"></div>
+      <div class="field"><label for="amvLow">最低（可空）</label><input id="amvLow" type="number" step="0.1"></div>
+    </div>
+    <div class="amv-manual-list" id="amvManualList"></div>
+    <div class="modal-actions">
+      <button type="button" class="btn ghost" id="btnAmvManualCancel">取消</button>
+      <button type="button" class="btn primary" id="btnAmvManualSave">保存</button>
     </div>
   </div>
 </div>

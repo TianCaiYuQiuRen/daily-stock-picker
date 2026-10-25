@@ -24,7 +24,7 @@ ROOT = os.path.dirname(os.path.abspath(__file__))
 if ROOT not in sys.path:
     sys.path.insert(0, ROOT)
 
-from core import (amv, chart_series, config, engine, etf, history, online, patterns,  # noqa: E402
+from core import (amv, amv_manual, chart_series, config, engine, etf, history, online, patterns,  # noqa: E402
                   pattern_cases, quotes, sell, shape_match, snapshot, strategies,
                   tdx_block, training)
 from core.tdx_local import TdxStore, board_of  # noqa: E402
@@ -649,9 +649,23 @@ class Handler(BaseHTTPRequestHandler):
             if not self._origin_ok():
                 log("拦截跨站 POST %s origin=%s" % (path, self.headers.get("Origin")))
                 return self._json({"ok": False, "error": "跨站请求被拒绝"}, 403)
-            if path in ("/api/write", "/api/config", "/api/share") and not self._csrf_ok():
+            if path in ("/api/write", "/api/config", "/api/share", "/api/amv/manual") and not self._csrf_ok():
                 log("拦截缺少 CSRF token 的 POST %s" % path)
                 return self._json({"ok": False, "error": "请求校验失败，请刷新页面后重试"}, 403)
+
+            if path == "/api/amv/manual":
+                if remote:
+                    return self._json({"ok": False, "error": "只有本机才能录入官方 0AMV"}, 403)
+                action = (data.get("action") or "save").strip()
+                try:
+                    if action == "delete":
+                        amv_manual.delete_entry(data.get("date"))
+                    else:
+                        amv_manual.save_entry(data)
+                except ValueError as exc:
+                    return self._json({"ok": False, "error": str(exc)}, 400)
+                log("录入官方 0AMV：%s" % (data.get("date") or ""))
+                return self._json({"ok": True, "amv": amv_manual.build(160)})
 
             if path == "/api/scan":
                 if remote and not (cfg.get("share") or {}).get("allow_remote_scan", True):
@@ -801,7 +815,8 @@ class Handler(BaseHTTPRequestHandler):
             except ValueError:
                 days = 160
             days = max(20, min(400, days))
-            return self._json(amv.compute(days))
+            manual = amv_manual.build(days)
+            return self._json(manual if manual else amv.compute(days))
         if path == "/api/health":
             with STATE.lock:
                 scan = dict(STATE.scan)
