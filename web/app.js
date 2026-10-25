@@ -165,6 +165,9 @@
     const dir = state.sort.dir;
     const arr = items.slice();
     arr.sort((a, b) => {
+      const ra = a.retained ? 1 : 0;
+      const rb = b.retained ? 1 : 0;
+      if (ra !== rb) return ra - rb;
       if (key === "code" || key === "name") {
         return dir * String(a[key] || "").localeCompare(String(b[key] || ""), "zh");
       }
@@ -331,6 +334,9 @@
     const r = state.result;
     $("statUniverse").textContent = r ? r.universe : "--";
     $("statMatched").textContent = r ? r.matched : "--";
+    $("statMatched").title = r && r.retained
+      ? "今日新入选 " + r.matched + " 只；另有 " + r.retained + " 只留存观察"
+      : "今日入选";
     $("statTime").textContent = r ? (r.elapsed + "s") : "--";
   }
 
@@ -388,6 +394,7 @@
       } else {
         text += " · 14:45 快照缺失（用当前涨幅代替）";
       }
+      if (r.retained) text += " · 留存观察 " + r.retained + " 只（10个交易日后清除）";
     }
     if (!resultMatchesSelection()) {
       text += " · 已切换战法，请重新选股";
@@ -409,7 +416,10 @@
     if (state.tableMode === "focus" && items.length > 10) items = items.slice(0, 10);
 
     $("tableTools").hidden = !raw.length;
-    $("tableCount").textContent = raw.length ? "显示 " + items.length + " / " + total + " 只" : "";
+    const retainedCount = raw.filter((x) => x.retained).length;
+    $("tableCount").textContent = raw.length
+      ? "显示 " + items.length + " / " + total + " 只" + (retainedCount ? " · 留存 " + retainedCount : "")
+      : "";
     if (!raw.length) {
       body.innerHTML = "";
       empty.hidden = false;
@@ -433,11 +443,12 @@
 
     const html = items.map((it, idx) => {
       const pctCls = pctClass(it.pct);
-      const tags = (it.tags || []).slice(0, 2).map((t, i) =>
-        '<span class="tagbadge' + (i === 0 ? " green" : "") + '">' + esc(t) + "</span>"
-      ).join("");
+      const tags = (it.tags || []).slice(0, 2).map((t, i) => {
+        const cls = it.retained && i === 0 ? " watch" : (i === 0 ? " green" : "");
+        return '<span class="tagbadge' + cls + '">' + esc(t) + "</span>";
+      }).join("");
       return (
-        '<tr class="clickable" data-code="' + it.code + '" data-price="' + it.price + '">' +
+        '<tr class="clickable' + (it.retained ? " retained-row" : "") + '" data-code="' + it.code + '" data-price="' + it.price + '">' +
         '<td class="rank">' + (idx + 1) + "</td>" +
         '<td class="code">' + esc(it.code) + "</td>" +
         '<td class="name">' + esc(it.name) + "</td>" +

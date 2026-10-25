@@ -4,7 +4,7 @@ import time
 import traceback
 from datetime import datetime
 
-from core import config, indicators, online, quotes, snapshot, strategies, tdx_local
+from core import config, indicators, online, quotes, retention, snapshot, strategies, tdx_local
 
 
 class ScanError(Exception):
@@ -206,11 +206,16 @@ def run_scan(progress=None, boards=None, strategy_key=None):
     if top_n > 0:
         new_items = new_items[:top_n]
 
-    items = new_items
+    fresh_count = len(new_items)
+    try:
+        items, retained_count = retention.merge(
+            strategy_key, new_items, market_date, quote_map, store)
+    except Exception:
+        items, retained_count = new_items, 0
     for i, it in enumerate(items, 1):
         it["rank"] = i
-        it["hold_days"] = 0
-        it["retained"] = False
+        it["hold_days"] = int(it.get("hold_days") or 0)
+        it["retained"] = bool(it.get("retained"))
 
     elapsed = round(time.time() - t0, 2)
     strat_meta = strategy.meta()
@@ -222,7 +227,9 @@ def run_scan(progress=None, boards=None, strategy_key=None):
         "quote_time": quote_time,
         "universe": total,
         "quoted": len(quote_map),
-        "matched": len(items),
+        "matched": fresh_count,
+        "retained": retained_count,
+        "shown": len(items),
         "boards": picked_boards,
         "strategy": strat_meta,
         "data_mode": mode,

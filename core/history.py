@@ -21,7 +21,9 @@ def save(result):
     key = (result.get("strategy") or {}).get("key") or "unknown"
     rec_id = "%s_%s" % (date, key)
     fields = ("code", "market", "name", "price", "pct", "tags", "rank", "score")
-    items = [{k: it.get(k) for k in fields} for it in result.get("items") or []]
+    items = [{k: it.get(k) for k in fields}
+             for it in (result.get("items") or [])
+             if not it.get("retained")]
     data = {
         "id": rec_id,
         "date": date,

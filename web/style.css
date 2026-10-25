@@ -443,6 +443,9 @@ td.signals .tagbadge { margin-bottom: 0; }
   font-weight: 600;
 }
 .tagbadge.green { color: #087a53; background: #e6f7f0; }
+.tagbadge.watch { color: #9a6a00; background: #fff5d9; border: 1px solid #f2d38c; }
+tr.retained-row { background: #fffdf6; }
+tr.retained-row:hover { background: #fff9e8; }
 
 .flash-up { animation: flashUp .7s ease; }
 @keyframes flashUp { 0% { background: rgba(229, 52, 63, .16); } 100% { background: transparent; } }
