@@ -1,4 +1,4 @@
-/* ===== 每日选股 前端逻辑 ===== */
+﻿/* ===== 每日选股 前端逻辑 ===== */
 (function () {
   "use strict";
 
@@ -1701,7 +1701,7 @@
     chg.textContent = (d.chg >= 0 ? "+" : "") + Number(d.chg).toFixed(2) + "%";
     chg.className = "amv-chg " + (d.chg >= 0 ? "up" : "down");
     let sub = "更新 " + d.last_date + " · 日K + EMA12 · 滚轮缩放 · 沪深成交额 10 日平滑 ÷ 1e7（通达信指数日线）";
-    if (d.stale_days > 1) sub += " · 数据滞后 " + d.stale_days + " 天";
+    if (d.stale_days > 1) sub += " · 数据滞后 " + d.stale_days + " 个交易日";
     $("amvSub").textContent = sub;
 
     if (amvChart) { amvChart.dispose(); amvChart = null; }
@@ -1737,7 +1737,7 @@
       const pad = (mx - mn) * 0.08 || mx * 0.005;
       return [mn - pad, mx + pad];
     };
-    const initialStart = 40;
+    const initialStart = 60;
     const initRange = rangeFor(initialStart, 100);
     amvChart.setOption({
       animation: false,
@@ -1780,7 +1780,7 @@
           handleStyle: { color: "#2f6bff" }, textStyle: { fontSize: 9, color: "#9aa5b8" } },
       ],
       series: [{
-        name: "0AMV", type: "candlestick", data: ohlc, barMaxWidth: 10,
+        name: "0AMV", type: "candlestick", data: ohlc, barMaxWidth: 16,
         itemStyle: {
           color: "#e5343f", color0: "#0a9e6b",
           borderColor: "#e5343f", borderColor0: "#0a9e6b",
@@ -1881,5 +1881,7 @@
 
   init();
 })();
+
+
 
 

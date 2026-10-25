@@ -1,11 +1,11 @@
-﻿# -*- coding: utf-8 -*-
+# -*- coding: utf-8 -*-
 """0AMV 活跃市值（活筹指数）代理指标。
 
 指南针未公开原版算法；这里按公开流传的民间公式：
     VAR1 = SMA(沪深全市场成交额, 10, 1) / 1e7
 成交额取通达信本地「上证指数 + 深证综指」日线的 amount 字段。
 """
-from datetime import datetime
+from datetime import datetime, timedelta
 
 from core import config
 from core.tdx_local import TdxStore
@@ -69,7 +69,12 @@ def compute(days=160):
     stale_days = 0
     try:
         last_dt = datetime.strptime(last["date"], "%Y-%m-%d").date()
-        stale_days = (datetime.now().date() - last_dt).days
+        cur = last_dt
+        today = datetime.now().date()
+        while cur < today:
+            cur += timedelta(days=1)
+            if cur.weekday() < 5:
+                stale_days += 1
     except ValueError:
         pass
 
@@ -84,4 +89,5 @@ def compute(days=160):
         "stale_days": stale_days,
         "series": series[-days:],
     }
+
 
