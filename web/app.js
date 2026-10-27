@@ -985,6 +985,7 @@
     $("btnAmvManual").addEventListener("click", openAmvManual);
     $("btnAmvManualCancel").addEventListener("click", () => { $("amvManualModal").hidden = true; });
     $("btnAmvManualSave").addEventListener("click", saveAmvManual);
+    $("amvImage").addEventListener("change", onAmvImage);
     $("amvManualModal").addEventListener("click", (e) => {
       if (e.target.id === "amvManualModal") $("amvManualModal").hidden = true;
     });
@@ -1831,8 +1832,36 @@
     $("amvManualModal").hidden = false;
     $("amvDate").value = amvToday();
     ["amvClose", "amvChgInput", "amvOpen", "amvHigh", "amvLow"].forEach((id) => { $(id).value = ""; });
+    $("amvImage").value = "";
+    $("amvOcrHint").textContent = "";
     loadAmvManualList();
     $("amvClose").focus();
+  }
+
+  async function onAmvImage(ev) {
+    const file = ev.target.files && ev.target.files[0];
+    if (!file) return;
+    if (file.size > 8 * 1024 * 1024) { toast("图片超过 8MB"); return; }
+    $("amvOcrHint").textContent = "正在识别截图…";
+    const reader = new FileReader();
+    reader.onload = async () => {
+      try {
+        const r = await api("/api/amv/ocr", { method: "POST", body: { image: reader.result } });
+        const f = r.fields || {};
+        if (f.date) $("amvDate").value = f.date;
+        if (f.close != null) $("amvClose").value = f.close;
+        if (f.chg != null) $("amvChgInput").value = f.chg;
+        if (f.open != null) $("amvOpen").value = f.open;
+        if (f.high != null) $("amvHigh").value = f.high;
+        if (f.low != null) $("amvLow").value = f.low;
+        $("amvOcrHint").textContent = f.close != null
+          ? "识别完成，请核对数值后保存"
+          : "识别到文字，但没有找到 0AMV 收盘，请手动填写";
+      } catch (e) {
+        $("amvOcrHint").textContent = "识别失败：" + e.message;
+      }
+    };
+    reader.readAsDataURL(file);
   }
 
   async function loadAmvManualList() {

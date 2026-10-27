@@ -1,6 +1,7 @@
 # -*- coding: utf-8 -*-
 """每日选股系统 —— 本地 Web 服务（Python 标准库，无第三方依赖）。"""
 import atexit
+import base64
 import calendar
 import json
 import logging
@@ -24,7 +25,7 @@ ROOT = os.path.dirname(os.path.abspath(__file__))
 if ROOT not in sys.path:
     sys.path.insert(0, ROOT)
 
-from core import (amv, amv_manual, chart_series, config, engine, etf, history, online, patterns,  # noqa: E402
+from core import (amv, amv_manual, amv_ocr, chart_series, config, engine, etf, history, online, patterns,  # noqa: E402
                   pattern_cases, quotes, sell, shape_match, snapshot, strategies,
                   tdx_block, training)
 from core.tdx_local import TdxStore, board_of  # noqa: E402
@@ -649,7 +650,7 @@ class Handler(BaseHTTPRequestHandler):
             if not self._origin_ok():
                 log("拦截跨站 POST %s origin=%s" % (path, self.headers.get("Origin")))
                 return self._json({"ok": False, "error": "跨站请求被拒绝"}, 403)
-            if path in ("/api/write", "/api/config", "/api/share", "/api/amv/manual") and not self._csrf_ok():
+            if path in ("/api/write", "/api/config", "/api/share", "/api/amv/manual", "/api/amv/ocr") and not self._csrf_ok():
                 log("拦截缺少 CSRF token 的 POST %s" % path)
                 return self._json({"ok": False, "error": "请求校验失败，请刷新页面后重试"}, 403)
 
@@ -666,6 +667,28 @@ class Handler(BaseHTTPRequestHandler):
                     return self._json({"ok": False, "error": str(exc)}, 400)
                 log("录入官方 0AMV：%s" % (data.get("date") or ""))
                 return self._json({"ok": True, "amv": amv_manual.build(160)})
+
+            if path == "/api/amv/ocr":
+                if remote:
+                    return self._json({"ok": False, "error": "只有本机才能识别截图"}, 403)
+                image = str(data.get("image") or "")
+                m = re.match(r"^data:image/(png|jpe?g|webp);base64,(.+)$", image, re.S | re.I)
+                if not m:
+                    return self._json({"ok": False, "error": "图片格式无效"}, 400)
+                kind = m.group(1).lower()
+                ext = ".jpg" if kind in ("jpeg", "jpg") else "." + kind
+                try:
+                    raw = base64.b64decode(m.group(2), validate=True)
+                except Exception:
+                    return self._json({"ok": False, "error": "图片解码失败"}, 400)
+                if len(raw) > 8 * 1024 * 1024:
+                    return self._json({"ok": False, "error": "图片超过 8MB"}, 400)
+                try:
+                    result = amv_ocr.recognize(raw, ext)
+                except Exception as exc:  # noqa: BLE001
+                    log("截图 OCR 失败：%s" % exc)
+                    return self._json({"ok": False, "error": "OCR 识别失败：%s" % exc}, 500)
+                return self._json(result)
 
             if path == "/api/scan":
                 if remote and not (cfg.get("share") or {}).get("allow_remote_scan", True):

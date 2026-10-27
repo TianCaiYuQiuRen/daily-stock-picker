@@ -1,4 +1,4 @@
-<!DOCTYPE html>
+﻿<!DOCTYPE html>
 <html lang="zh-CN">
 <head>
 <meta charset="utf-8">
@@ -355,6 +355,8 @@
   <div class="modal amv-manual-modal">
     <h3>录入指南针 0AMV</h3>
     <p class="amv-manual-tip">从指南针手机/电脑端读取收盘值和涨跌幅。录入后，卡片、K 线和少妇战法规则都改用官方值；只保存在本机。</p>
+    <div class="field"><label for="amvImage">上传指南针截图（自动识别）</label><input id="amvImage" type="file" accept="image/*"></div>
+    <div class="field-hint" id="amvOcrHint"></div>
     <div class="field-row">
       <div class="field"><label for="amvDate">日期</label><input id="amvDate" type="date"></div>
       <div class="field"><label for="amvClose">0AMV 收盘</label><input id="amvClose" type="number" step="0.1" placeholder="如 143060.5"></div>
@@ -381,3 +383,4 @@
 <script src="/app.js"></script>
 </body>
 </html>
+
