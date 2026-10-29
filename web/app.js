@@ -474,14 +474,12 @@
     const has = !!(state.result && state.result.items && state.result.items.length);
     const connected = !!(state.tdx && state.tdx.connected);
     const stale = !!(state.freshness && state.freshness.level === "stale");
-    const trading = !!(state.freshness && state.freshness.trading);
-    const enabled = has && on && state.canWrite && connected && !stale && !trading && resultMatchesSelection();
+    const enabled = has && on && state.canWrite && connected && !stale && resultMatchesSelection();
     ["btnWrite", "btnWriteSide"].forEach((id) => {
       const el = $(id);
       el.disabled = !enabled;
       el.hidden = !state.canWrite || !connected;
-      el.title = trading ? "交易时段保护：收盘后再写入板块"
-        : (stale ? "日线数据滞后，请先更新通达信盘后数据" : "");
+      el.title = stale ? "日线数据滞后，请先更新通达信盘后数据" : "";
     });
   }
 
@@ -526,9 +524,7 @@
       $("blockDesc").textContent = "尚未写入，点击下方按钮创建板块";
       $("writeHint").textContent = "通达信只在启动时读取板块，写入后需重启客户端";
     }
-    if (state.freshness && state.freshness.trading) {
-      $("writeHint").textContent = "交易时段保护：收盘后再写入板块，避免关闭通达信影响交易";
-    } else if (state.freshness && state.freshness.level === "stale") {
+    if (state.freshness && state.freshness.level === "stale") {
       $("writeHint").textContent = "日线数据滞后，请先更新通达信盘后数据再写入";
     }
   }
@@ -754,11 +750,15 @@
 
     const wasRunning = !!(state.tdx && state.tdx.running);
     if (wasRunning) {
+      const tradingNote = (state.freshness && state.freshness.trading)
+        ? "当前处于交易时段，关闭通达信会中断行情显示和交易操作；如确认继续，请点「关闭并写入」。\n\n"
+        : "";
       const yes = await showModal(
         "写入前需要关闭通达信",
         "写入会先清空「" + ((r.strategy && r.strategy.block_name) || "该板块") +
         "」里的原有股票，再写入今天选出的 " + r.items.length + " 只。\n\n" +
-        "通达信正在运行，必须先关闭，否则客户端会用内存里的旧名单覆盖文件。\n关闭并写入，完成后自动重启通达信？",
+        "通达信正在运行，必须先关闭，否则客户端会用内存里的旧名单覆盖文件。\n\n" +
+        tradingNote + "关闭并写入，完成后自动重启通达信？",
         "关闭并写入", true
       );
       if (!yes) { toast("已取消，未写入"); return; }
