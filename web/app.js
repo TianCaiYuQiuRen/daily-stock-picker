@@ -384,7 +384,10 @@
       " · 日线 " + fmtMarketDate(r.market_date);
     if (r.data_mode === "online") {
       text += " · 在线日线";
+    } else if (r.data_mode === "online-intraday") {
+      text += " · 在线日线（盘中）";
     }
+    if (r.online_fallback) text += " · 在线补抓 " + r.online_fallback + " 只";
     if (r.price_mode === "close") {
       text += " · 收盘价筛选";
     }

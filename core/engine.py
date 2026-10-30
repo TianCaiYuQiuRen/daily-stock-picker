@@ -67,6 +67,22 @@ def _recent_bad(bars, board):
     return False
 
 
+def _online_bars(market, code, q=None, today_int=0):
+    """在线日线兜底：本地缺失某只股票时按需抓取。"""
+    bars = online.get_bars(market, code)
+    if not bars:
+        online.fetch_bars(market, code)
+        bars = online.get_bars(market, code)
+    if bars and q and _trading_time() and bars[-1][0] < today_int:
+        online.fetch_bars(market, code)
+        fresh = online.get_bars(market, code)
+        if fresh:
+            bars = fresh
+    if bars and q:
+        bars = _patch_last_bar(bars, q)
+    return bars
+
+
 def run_scan(progress=None, boards=None, strategy_key=None):
     """执行一次全市场选股，返回结果 dict。progress(phase, pct) 可选。"""
     t0 = time.time()
@@ -157,6 +173,7 @@ def run_scan(progress=None, boards=None, strategy_key=None):
     max_price = float(filters.get("max_price") or 1e9)
     new_items = []
     total = len(universe)
+    online_fallback = 0
 
     for idx, (market, code) in enumerate(universe):
         q = quote_map.get(code)
@@ -174,17 +191,12 @@ def run_scan(progress=None, boards=None, strategy_key=None):
 
         if mode == "tdx":
             bars = store.bars(market, code, limit=220)
-        else:
-            bars = online.get_bars(market, code)
             if not bars:
-                online.fetch_bars(market, code)
-                bars = online.get_bars(market, code)
-            if bars and _trading_time() and bars[-1][0] < today_int:
-                online.fetch_bars(market, code)
-                fresh = online.get_bars(market, code)
-                if fresh:
-                    bars = fresh
-            bars = _patch_last_bar(bars, q)
+                bars = _online_bars(market, code, q, today_int)
+                if bars:
+                    online_fallback += 1
+        else:
+            bars = _online_bars(market, code, q, today_int)
         if _recent_bad(bars, tdx_local.board_of(market, code)):
             continue
         f = indicators.build_features(bars, q, market_date, pct_1445=pct_map.get(code),
@@ -233,6 +245,7 @@ def run_scan(progress=None, boards=None, strategy_key=None):
         "boards": picked_boards,
         "strategy": strat_meta,
         "data_mode": mode,
+        "online_fallback": online_fallback,
         "price_mode": "close" if closed else "realtime",
         "pct1445": {
             "available": bool(snap),

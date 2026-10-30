@@ -70,16 +70,20 @@ def get_store(root):
 
 
 def bars_for(market, code, limit=400):
-    """按当前数据模式取日线（历史统计/看图共用）。"""
+    """按当前数据模式取日线（历史统计/看图共用）；本地缺失则在线补抓。"""
     cfg = config.get()
     store = get_store(cfg["tdx_root"])
     if store.available() and cfg.get("data_source") != "online":
-        return store.bars(market, code, limit=limit)
+        bars = store.bars(market, code, limit=limit)
+        if bars:
+            return bars
     bars = online.get_bars(market, code)
-    if not bars:
+    now = datetime.now()
+    if not bars or (now.weekday() < 5 and now.strftime("%H%M") >= "0930"
+                    and bars[-1][0] < int(time.strftime("%Y%m%d"))):
         online.fetch_bars(market, code)
         bars = online.get_bars(market, code)
-    return bars[:limit]
+    return bars[-limit:] if limit else bars
 
 
 def freshness():
@@ -420,7 +424,9 @@ def _run_scan_async(boards=None, strategy_key=None, auto_write=False):
                 STATE.result = result
                 STATE.scan["phase"] = "完成"
                 STATE.last_error = ""
-                log("选股完成：%d 只，用时 %.1fs" % (result.get("matched", 0), result.get("elapsed", 0)))
+                log("选股完成：%d 只，用时 %.1fs，在线补抓 %d 只" % (
+                    result.get("matched", 0), result.get("elapsed", 0),
+                    result.get("online_fallback", 0)))
                 try:
                     history.save(result)
                 except Exception:
