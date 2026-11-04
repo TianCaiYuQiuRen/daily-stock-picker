@@ -1008,7 +1008,8 @@
     $("historyModal").addEventListener("click", (e) => { if (e.target.id === "historyModal") closeHistoryModal(); });
     $("btnSettings").addEventListener("click", openDrawer);
     $("dataPill").addEventListener("click", showHealth);
-    $("btnAmvManual").addEventListener("click", openAmvManual);
+    const amvBtn = $("btnAmvManual");
+    if (amvBtn) amvBtn.addEventListener("click", openAmvManual);
     $("btnAmvManualCancel").addEventListener("click", () => { $("amvManualModal").hidden = true; });
     $("btnAmvManualSave").addEventListener("click", saveAmvManual);
     $("amvImage").addEventListener("change", onAmvImage);
@@ -1721,7 +1722,8 @@
       const d = await api("/api/amv?days=120");
       if (!d.ok) {
         $("amvCard").hidden = false;
-        $("amvSub").textContent = d.error || "暂无数据";
+        const el = $("amvRuleStatus");
+        if (el) el.textContent = "少妇战法：暂无数据";
         return;
       }
       renderAmv(d);
@@ -1729,31 +1731,10 @@
   }
 
   function renderAmv(d) {
-    $("amvCard").hidden = false;
-    const manual = d.source === "manual";
-    $("amvSource").textContent = manual ? "官方录入" : "成交额代理";
-    $("amvValue").textContent = Number(d.value).toLocaleString("zh-CN", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
-    const chg = $("amvChg");
-    chg.textContent = (d.chg >= 0 ? "+" : "") + Number(d.chg).toFixed(2) + "%";
-    chg.className = "amv-chg " + (d.chg >= 0 ? "up" : "down");
-    let sub = manual
-      ? "更新 " + d.last_date + " · 官方录入 " + (d.count || (d.series || []).length) + " 条 · 日K + EMA12"
-      : "更新 " + d.last_date + " · 日K + EMA12 · 滚轮缩放 · 沪深成交额 10 日平滑 ÷ 1e7（通达信指数日线）";
-    if (d.stale_days > 1) sub += " · 数据滞后 " + d.stale_days + " 个交易日";
-    $("amvSub").textContent = sub;
-
-    if (amvChart) { amvChart.dispose(); amvChart = null; }
-    amvChart = echarts.init($("amvChart"));
+    const card = $("amvCard");
+    if (!card) return;
+    card.hidden = false;
     const rows = d.series || [];
-    const dates = rows.map((x) => x.date);
-    const values = rows.map((x) => x.value);
-    const highs = rows.map((x) => (x.high != null ? x.high : x.value));
-    const lows = rows.map((x) => (x.low != null ? x.low : x.value));
-    const ohlc = rows.map((x) => [x.open, x.value, x.low, x.high]);
-    const emas = rows.map((x) => x.ema);
-    const chgMap = {};
-    rows.forEach((x) => { chgMap[x.date] = x.chg; });
-
     let tactic = "ok";
     for (let i = 1; i < rows.length; i++) {
       const c = Number(rows[i].chg || 0);
@@ -1762,87 +1743,15 @@
       else if (c >= 4 || c + p >= 4) tactic = "ok";
     }
     const ruleEl = $("amvRuleStatus");
-    if (ruleEl) {
-      if (rows.length < 2) {
-        ruleEl.textContent = "少妇战法：需至少 2 天官方数据";
-        ruleEl.className = "amv-rule-status na";
-      } else {
-        ruleEl.textContent = (tactic === "cut" ? "少妇战法：逐步减仓" : "少妇战法：适用期") +
-          (manual ? "" : "（代理）");
-        ruleEl.className = "amv-rule-status " + tactic;
-      }
+    if (!ruleEl) return;
+    if (rows.length < 2) {
+      ruleEl.textContent = "少妇战法：需至少 2 天官方数据";
+      ruleEl.className = "amv-rule-status na";
+    } else {
+      ruleEl.textContent = (tactic === "cut" ? "少妇战法：逐步减仓" : "少妇战法：适用期") +
+        (d.source === "manual" ? "" : "（代理）");
+      ruleEl.className = "amv-rule-status " + tactic;
     }
-    const fmt = (v) => Number(v).toLocaleString("zh-CN", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
-    const rangeFor = (start, end) => {
-      const n = values.length;
-      const s = Math.max(0, Math.floor((n * start) / 100));
-      const e = Math.min(n, Math.ceil((n * end) / 100));
-      const lo = lows.slice(s, Math.max(s + 1, e));
-      const hi = highs.slice(s, Math.max(s + 1, e));
-      const mn = Math.min(...lo);
-      const mx = Math.max(...hi);
-      const pad = (mx - mn) * 0.08 || mx * 0.005;
-      return [mn - pad, mx + pad];
-    };
-    const initialStart = 60;
-    const initRange = rangeFor(initialStart, 100);
-    amvChart.setOption({
-      animation: false,
-      grid: { left: 8, right: 12, top: 10, bottom: 30, containLabel: true },
-      tooltip: {
-        trigger: "axis",
-        axisPointer: { type: "cross" },
-        backgroundColor: "rgba(27,36,54,.92)", borderWidth: 0,
-        textStyle: { color: "#fff", fontSize: 12 },
-        formatter: (ps) => {
-          const v = ps[0].data;
-          const date = ps[0].axisValue;
-          const chg = Number(chgMap[date] || 0);
-          const color = chg >= 0 ? "#ff7a7a" : "#4ade80";
-          return date + "<br/>开 " + fmt(v[0]) + "　收 " + fmt(v[1]) +
-            "<br/>高 " + fmt(v[3]) + "　低 " + fmt(v[2]) +
-            '<br/><span style="color:' + color + '">涨跌幅 ' +
-            (chg >= 0 ? "+" : "") + chg.toFixed(2) + "%</span>";
-        },
-      },
-      xAxis: {
-        type: "category", data: dates, boundaryGap: true,
-        axisLabel: { fontSize: 10, color: "#9aa5b8", interval: Math.max(1, Math.floor(dates.length / 6)) },
-        axisTick: { show: false }, axisLine: { lineStyle: { color: "#e3e9f3" } },
-      },
-      yAxis: {
-        min: initRange[0], max: initRange[1],
-        splitLine: { lineStyle: { color: "#f1f4f9" } },
-        axisLabel: {
-          fontSize: 10, color: "#9aa5b8",
-          formatter: (v) => (v >= 10000 ? (v / 10000).toFixed(2) + "万" : Number(v).toFixed(2)),
-        },
-      },
-      dataZoom: [
-        { type: "inside", xAxisIndex: 0, start: initialStart, end: 100,
-          zoomOnMouseWheel: true, moveOnMouseMove: true, moveOnMouseWheel: false },
-        { type: "slider", xAxisIndex: 0, start: initialStart, end: 100,
-          height: 12, bottom: 2, borderColor: "transparent",
-          backgroundColor: "#f1f5ff", fillerColor: "rgba(47,107,255,.15)",
-          handleStyle: { color: "#2f6bff" }, textStyle: { fontSize: 9, color: "#9aa5b8" } },
-      ],
-      series: [{
-        name: "0AMV", type: "candlestick", data: ohlc, barMaxWidth: 16,
-        itemStyle: {
-          color: "#e5343f", color0: "#0a9e6b",
-          borderColor: "#e5343f", borderColor0: "#0a9e6b",
-        },
-      }, {
-        name: "EMA12", type: "line", data: emas,
-        showSymbol: false, smooth: true, z: 3,
-        lineStyle: { width: 1.5, color: "#e6b800" },
-      }],
-    });
-    amvChart.on("datazoom", () => {
-      const dz = (amvChart.getOption().dataZoom || [])[0] || {};
-      const r = rangeFor(Number(dz.start || 0), Number(dz.end || 100));
-      amvChart.setOption({ yAxis: { min: r[0], max: r[1] } });
-    });
   }
 
   function amvToday() {

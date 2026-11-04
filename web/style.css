@@ -1059,3 +1059,10 @@ table td.score { color: var(--muted); font-family: var(--mono); font-size: 11px;
 
 .progress-right { display: flex; align-items: center; gap: 10px; }
 .progress-cancel { padding: 4px 10px; font-size: 13px; }
+
+/* ---------- 0AMV 仅保留少妇战法提示 ---------- */
+.amv-card.amv-rule-card { display: block; min-height: 0; padding: 16px 22px; }
+.amv-rule-head { display: flex; align-items: center; gap: 14px; flex-wrap: wrap; }
+.amv-rule-label { font-size: 14px; color: #7b879c; font-weight: 600; }
+.amv-rule-card .amv-rule-status { font-size: 18px; margin: 0; }
+.amv-rule-card .amv-rule-text { margin-top: 6px; font-size: 13px; line-height: 1.6; }

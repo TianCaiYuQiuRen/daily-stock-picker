@@ -1,4 +1,4 @@
-﻿<!DOCTYPE html>
+<!DOCTYPE html>
 <html lang="zh-CN">
 <head>
 <meta charset="utf-8">
@@ -91,19 +91,12 @@
       <button class="btn ghost small" id="btnPerfHistory" type="button">看历史明细</button>
     </section>
 
-    <section class="amv-card card" id="amvCard" hidden>
-      <div class="amv-left">
-        <div class="amv-title">活跃市值 <span>0AMV</span><em id="amvSource">成交额代理</em>
-          <button type="button" class="amv-edit" id="btnAmvManual">录入官方值</button>
-        </div>
-        <div class="amv-value"><b id="amvValue">--</b><small>点</small><i id="amvChg" class="amv-chg">--</i></div>
-        <div class="amv-sub" id="amvSub">加载中…</div>
-        <div class="amv-rule">
-          <div class="amv-rule-status" id="amvRuleStatus">少妇战法：--</div>
-          <div class="amv-rule-text">0AMV 单日 ≤ -2.3% 后，少妇战法逐步减仓；直到单日 ≥ +4%，或连续两日合计 ≥ +4%，才重新适用。</div>
-        </div>
+    <section class="amv-card amv-rule-card card" id="amvCard" hidden>
+      <div class="amv-rule-head">
+        <span class="amv-rule-label">少妇战法提示</span>
+        <span class="amv-rule-status" id="amvRuleStatus">少妇战法：--</span>
       </div>
-      <div class="amv-chart" id="amvChart"></div>
+      <div class="amv-rule-text">0AMV 单日 ≤ -2.3% 后，少妇战法逐步减仓；直到单日 ≥ +4%，或连续两日合计 ≥ +4%，才重新适用。</div>
     </section>
 
     <section class="content">
