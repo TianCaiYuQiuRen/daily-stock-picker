@@ -1056,3 +1056,6 @@ table td.score { color: var(--muted); font-family: var(--mono); font-size: 11px;
 }
 
 .amv-rule-status.na { color: #8a94a6; }
+
+.progress-right { display: flex; align-items: center; gap: 10px; }
+.progress-cancel { padding: 4px 10px; font-size: 13px; }

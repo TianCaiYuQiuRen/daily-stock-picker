@@ -11,6 +11,10 @@ class ScanError(Exception):
     pass
 
 
+class ScanCancelled(Exception):
+    """用户主动终止选股。"""
+
+
 def _trading_time(now=None):
     now = now or datetime.now()
     if now.weekday() >= 5:
@@ -83,7 +87,7 @@ def _online_bars(market, code, q=None, today_int=0):
     return bars
 
 
-def run_scan(progress=None, boards=None, strategy_key=None):
+def run_scan(progress=None, boards=None, strategy_key=None, should_stop=None):
     """执行一次全市场选股，返回结果 dict。progress(phase, pct) 可选。"""
     t0 = time.time()
 
@@ -93,6 +97,12 @@ def run_scan(progress=None, boards=None, strategy_key=None):
                 progress(phase, pct)
             except Exception:
                 pass
+
+    def check():
+        if should_stop and should_stop():
+            raise ScanCancelled()
+
+    check()
 
     cfg = config.get()
     strategy_key = strategy_key or cfg.get("strategy_key")
@@ -125,7 +135,7 @@ def run_scan(progress=None, boards=None, strategy_key=None):
         market_date = today_int if mode != "tdx" else store.last_trade_date()
         if mode != "tdx":
             report("通达信日线未更新，改用在线日线…", 0.08)
-            online.prefetch(universe, progress=lambda p: report(
+            online.prefetch(universe, should_stop=should_stop, progress=lambda p: report(
                 "正在下载在线日线 %d%%" % int(p * 100), 0.08 + 0.58 * p))
     else:
         report("正在获取全市场股票列表…", 0.02)
@@ -137,12 +147,15 @@ def run_scan(progress=None, boards=None, strategy_key=None):
             raise ScanError("无法从网络获取股票列表，请检查网络后重试。")
         market_date = 0
         report("首次运行需下载日线，请稍候…", 0.08)
-        online.prefetch(universe, progress=lambda p: report(
+        online.prefetch(universe, should_stop=should_stop, progress=lambda p: report(
             "正在下载日线 %d%%" % int(p * 100), 0.08 + 0.58 * p))
 
+    check()
     report("正在获取实时行情…", 0.68)
     quote_map = quotes.fetch_quotes(
-        universe, progress=lambda p: report("正在获取实时行情…", max(0.68, 0.68 + 0.16 * p)))
+        universe, should_stop=should_stop,
+        progress=lambda p: report("正在获取实时行情…", max(0.68, 0.68 + 0.16 * p)))
+    check()
 
     # 判断是否收盘后：数据日期早于今天，或行情时间已过 15:00
     today_int = int(time.strftime("%Y%m%d"))
@@ -176,6 +189,7 @@ def run_scan(progress=None, boards=None, strategy_key=None):
     online_fallback = 0
 
     for idx, (market, code) in enumerate(universe):
+        check()
         q = quote_map.get(code)
         if not q:
             continue
@@ -213,6 +227,7 @@ def run_scan(progress=None, boards=None, strategy_key=None):
         if idx % 500 == 0:
             report("正在计算指标…", 0.78 + 0.2 * idx / max(1, total))
 
+    check()
     top_n = int(cfg.get("top_n") or 0)
     new_items.sort(key=lambda x: x["score"], reverse=True)
     if top_n > 0:
@@ -309,10 +324,12 @@ def capture_1445(progress=None):
     return {"date": date, "count": len(pct_map)}
 
 
-def safe_scan(progress=None, boards=None, strategy_key=None):
+def safe_scan(progress=None, boards=None, strategy_key=None, should_stop=None):
     """给后台线程用的包装：异常不抛出，返回 (result, error)。"""
     try:
-        return run_scan(progress, boards, strategy_key), None
+        return run_scan(progress, boards, strategy_key, should_stop=should_stop), None
+    except ScanCancelled:
+        return None, "__cancelled__"
     except ScanError as exc:
         return None, str(exc)
     except Exception:  # noqa: BLE001

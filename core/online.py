@@ -1,4 +1,4 @@
-﻿# -*- coding: utf-8 -*-
+# -*- coding: utf-8 -*-
 """在线数据模式：没有安装通达信时，用网络行情 + 在线日线工作。"""
 import json
 import os
@@ -122,7 +122,7 @@ def fetch_bars(market, code):
     return True
 
 
-def prefetch(pairs, progress=None):
+def prefetch(pairs, progress=None, should_stop=None):
     """并发补齐当日缺失的日线，返回成功数量。"""
     todo = [(m, c) for m, c in pairs if not get_bars(m, c)]
     total = len(todo)
@@ -130,9 +130,14 @@ def prefetch(pairs, progress=None):
         return 0
     done = 0
     ok = 0
-    with ThreadPoolExecutor(max_workers=10) as pool:
-        futs = [pool.submit(fetch_bars, m, c) for m, c in todo]
+    pool = ThreadPoolExecutor(max_workers=10)
+    futs = [pool.submit(fetch_bars, m, c) for m, c in todo]
+    try:
         for fut in as_completed(futs):
+            if should_stop and should_stop():
+                for f in futs:
+                    f.cancel()
+                break
             done += 1
             try:
                 if fut.result():
@@ -144,5 +149,7 @@ def prefetch(pairs, progress=None):
                     progress(done / float(total))
                 except Exception:
                     pass
+    finally:
+        pool.shutdown(wait=False, cancel_futures=True)
     return ok
 

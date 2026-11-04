@@ -168,7 +168,7 @@ def _chunks(seq, n):
         yield seq[i:i + n]
 
 
-def fetch_quotes(markets, progress=None):
+def fetch_quotes(markets, progress=None, should_stop=None):
     """markets: [(market, code)] -> {code: quote}
     腾讯为主；整批失败时用新浪兜底补齐基础价格。
     """
@@ -194,9 +194,14 @@ def fetch_quotes(markets, progress=None):
                 pass
             return {}
 
-    with ThreadPoolExecutor(max_workers=WORKERS) as pool:
-        futures = {pool.submit(run, b): b for b in batches}
+    pool = ThreadPoolExecutor(max_workers=WORKERS)
+    futures = {pool.submit(run, b): b for b in batches}
+    try:
         for fut in as_completed(futures):
+            if should_stop and should_stop():
+                for f in futures:
+                    f.cancel()
+                break
             try:
                 part = fut.result()
             except Exception:
@@ -206,6 +211,8 @@ def fetch_quotes(markets, progress=None):
                 done[0] += len(futures[fut])
                 if progress:
                     progress(min(0.9, 0.15 + 0.75 * done[0] / max(1, len(codes))))
+    finally:
+        pool.shutdown(wait=False, cancel_futures=True)
     return result
 
 

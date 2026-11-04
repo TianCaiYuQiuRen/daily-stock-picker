@@ -606,7 +606,25 @@
     btn.classList.toggle("loading", on);
     btn.textContent = on ? "选股中" : "开始选股";
     $("progress").hidden = !on;
+    const cancel = $("btnCancelScan");
+    cancel.hidden = !on;
+    cancel.disabled = false;
+    cancel.textContent = "终止选股";
     if (!on) $("progressFill").style.width = "0%";
+  }
+
+  async function cancelScan() {
+    const btn = $("btnCancelScan");
+    btn.disabled = true;
+    btn.textContent = "终止中…";
+    try {
+      await api("/api/scan/cancel", { method: "POST", body: {} });
+      toast("正在终止选股…");
+    } catch (e) {
+      btn.disabled = false;
+      btn.textContent = "终止选股";
+      toast(e.message);
+    }
   }
 
   function updateProgress(scan) {
@@ -655,6 +673,10 @@
           return;
         }
         setScanning(false);
+        if (s.scan.cancelled || s.scan.phase === "已终止") {
+          toast("已终止选股");
+          return;
+        }
         if (s.scan.error) {
           showModal("选股失败", s.scan.error);
         } else if (s.result) {
@@ -961,6 +983,7 @@
   /* ---------- 事件绑定 ---------- */
   function bind() {
     $("btnScan").addEventListener("click", startScan);
+    $("btnCancelScan").addEventListener("click", cancelScan);
     $("btnWrite").addEventListener("click", doWrite);
     $("btnWriteSide").addEventListener("click", doWrite);
     $("btnExport").addEventListener("click", exportCsv);

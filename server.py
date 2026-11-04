@@ -289,7 +289,9 @@ class AppState:
     def __init__(self):
         self.lock = threading.RLock()
         self.scan = {"running": False, "phase": "", "pct": 0.0, "error": None,
-                     "started_at": None, "finished_at": None, "boards": []}
+                     "started_at": None, "finished_at": None, "boards": [],
+                     "cancelled": False}
+        self.scan_cancel = None
         self.result = config.load_last_result()
         self.last_auto_date = ""
         self.last_snap_date = ""
@@ -394,28 +396,40 @@ def normalize_strategy(raw, cfg):
 
 
 def _run_scan_async(boards=None, strategy_key=None, auto_write=False):
+    cancel_event = threading.Event()
     with STATE.lock:
         if STATE.scan["running"]:
             return False
         STATE.scan.update({"running": True, "phase": "准备中…", "pct": 0.0,
                            "error": None, "started_at": datetime.now().strftime("%H:%M:%S"),
                            "finished_at": None, "boards": list(boards or []),
-                           "strategy": strategy_key or ""})
+                           "strategy": strategy_key or "", "cancelled": False})
+        STATE.scan_cancel = cancel_event
     config.ensure_dirs()
 
     def progress(phase, pct):
+        if cancel_event.is_set():
+            return
         with STATE.lock:
             STATE.scan["phase"] = phase
             STATE.scan["pct"] = round(float(pct), 3)
 
     def worker():
         log("开始选股 strategy=%s boards=%s" % (strategy_key or "", ",".join(boards or [])))
-        result, err = engine.safe_scan(progress, boards, strategy_key)
+        result, err = engine.safe_scan(progress, boards, strategy_key,
+                                       should_stop=cancel_event.is_set)
         with STATE.lock:
             STATE.scan["running"] = False
             STATE.scan["finished_at"] = datetime.now().strftime("%H:%M:%S")
             STATE.scan["pct"] = 1.0
-            if err:
+            STATE.scan_cancel = None
+            if err == "__cancelled__":
+                STATE.scan["cancelled"] = True
+                STATE.scan["error"] = None
+                STATE.scan["phase"] = "已终止"
+                STATE.last_error = ""
+                log("选股已终止")
+            elif err:
                 STATE.scan["error"] = err
                 STATE.scan["phase"] = "失败"
                 STATE.last_error = "选股失败：%s" % err
@@ -706,6 +720,16 @@ class Handler(BaseHTTPRequestHandler):
                                           auto_write=False)
                 return self._json({"ok": True, "started": started, "boards": boards,
                                    "strategy": strategy_key})
+
+            if path == "/api/scan/cancel":
+                with STATE.lock:
+                    ev = STATE.scan_cancel
+                    if not STATE.scan["running"] or ev is None:
+                        return self._json({"ok": False, "error": "当前没有进行中的选股"}, 400)
+                    ev.set()
+                    STATE.scan["phase"] = "正在终止…"
+                log("请求终止选股")
+                return self._json({"ok": True, "message": "正在终止选股…"})
 
             if path == "/api/write":
                 if remote:
