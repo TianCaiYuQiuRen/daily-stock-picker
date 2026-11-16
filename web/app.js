@@ -573,6 +573,54 @@
     showModal("数据与服务状态", lines.join("\n"), "知道了", false);
   }
 
+  function fmtDateNum(v) {
+    const s = String(v || "");
+    return s.length === 8 ? s.slice(0, 4) + "-" + s.slice(4, 6) + "-" + s.slice(6, 8) : "--";
+  }
+
+  async function checkKline() {
+    const btn = $("btnCheckKline");
+    const label = btn.textContent;
+    btn.disabled = true;
+    btn.textContent = "检查中…";
+    try {
+      const d = await api("/api/kline/check");
+      if (!d.ok) throw new Error(d.error || "检查失败");
+      if (d.freshness) {
+        state.freshness = d.freshness;
+        renderFreshness();
+      }
+      const lines = [];
+      if (!d.available) {
+        lines.push("未检测到本地通达信日线目录。");
+        lines.push("请先在「设置」里确认通达信目录，或直接用在线数据选股。");
+      } else {
+        lines.push("本地日线：" + fmtDateNum(d.local_date));
+        lines.push("最新交易日：" + fmtDateNum(d.expected_date));
+        lines.push("本地股票：" + d.stocks + " 只（已到最新 " + d.at_last +
+          "，未到最新 " + d.behind + "，缺数据 " + d.missing + "）");
+        if (d.level === "ok") {
+          lines.push("状态：本地K线已是最新。");
+        } else if (d.level === "warn") {
+          lines.push("状态：滞后 " + d.lag + " 个交易日，建议更新。");
+        } else if (d.level === "stale") {
+          lines.push("状态：明显滞后 " + d.lag + " 个交易日。");
+        } else {
+          lines.push("状态：无法判断。");
+        }
+        if (d.level !== "ok") {
+          lines.push("", "请打开通达信 → 盘后数据下载 → 日线，下载完成后再点一次「检查K线」。");
+        }
+      }
+      showModal("本地K线检查", lines.join("\n"), "知道了", false);
+    } catch (e) {
+      showModal("检查失败", e.message);
+    } finally {
+      btn.disabled = false;
+      btn.textContent = label;
+    }
+  }
+
   function renderAll() {
     renderStrategy();
     renderStrategyBar();
@@ -593,6 +641,7 @@
     $("guestPill").hidden = !state.remote;
     $("btnSettings").hidden = state.remote;
     $("btnShare").hidden = state.remote;
+    $("btnCheckKline").hidden = state.remote;
     if (!state.canScan) {
       $("btnScan").disabled = true;
       $("btnScan").title = "站长已关闭访客选股";
@@ -1008,6 +1057,7 @@
     $("historyModal").addEventListener("click", (e) => { if (e.target.id === "historyModal") closeHistoryModal(); });
     $("btnSettings").addEventListener("click", openDrawer);
     $("dataPill").addEventListener("click", showHealth);
+    $("btnCheckKline").addEventListener("click", checkKline);
     const amvBtn = $("btnAmvManual");
     if (amvBtn) amvBtn.addEventListener("click", openAmvManual);
     $("btnAmvManualCancel").addEventListener("click", () => { $("amvManualModal").hidden = true; });

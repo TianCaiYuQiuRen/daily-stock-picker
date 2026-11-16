@@ -138,6 +138,86 @@ def is_trading_time(now=None):
     return ("0915" <= hm <= "1130") or ("1300" <= hm <= "1500")
 
 
+def _business_lag(last, today):
+    try:
+        cur = datetime.strptime(str(last), "%Y%m%d").date()
+        end = datetime.strptime(str(today), "%Y%m%d").date()
+    except ValueError:
+        return 0
+    lag = 0
+    while cur < end:
+        cur += timedelta(days=1)
+        if cur.weekday() < 5:
+            lag += 1
+    return lag
+
+
+def check_kline():
+    """重新读取本地通达信日线，和指数最新交易日对比。"""
+    cfg = config.get()
+    root = cfg.get("tdx_root") or ""
+    _STORES.pop(root, None)  # 丢掉缓存，重新扫描磁盘
+    store = get_store(root)
+    available = store.available()
+    local = store.last_trade_date() if available else 0
+
+    expected = 0
+    try:
+        q = quotes.fetch_few([("sh", "000001")]).get("000001") or {}
+        t = str(q.get("time") or "")
+        if len(t) >= 8 and t[:8].isdigit():
+            expected = int(t[:8])
+    except Exception:
+        pass
+    if not expected:
+        expected = int(time.strftime("%Y%m%d"))
+
+    lag = _business_lag(local, expected)
+    if not local:
+        level = "unknown"
+    elif lag <= 1:
+        level = "ok"
+    elif lag <= 3:
+        level = "warn"
+    else:
+        level = "stale"
+
+    stocks = at_last = behind = missing = 0
+    if available:
+        for market, code in store.universe():
+            stocks += 1
+            bars = store.bars(market, code, limit=1)
+            if not bars:
+                missing += 1
+            elif bars[-1][0] == local:
+                at_last += 1
+            else:
+                behind += 1
+
+    log("K线检查：本地 %s / 最新 %s，滞后 %d，已更新 %d/%d" % (
+        local or "-", expected, lag, at_last, stocks))
+    return {
+        "ok": True,
+        "available": available,
+        "local_date": local,
+        "expected_date": expected,
+        "lag": lag,
+        "level": level,
+        "stocks": stocks,
+        "at_last": at_last,
+        "behind": behind,
+        "missing": missing,
+        "freshness": {
+            "source": "tdx",
+            "last_date": local,
+            "lag": lag,
+            "level": level,
+            "today": expected,
+            "trading": is_trading_time(),
+        },
+    }
+
+
 def lan_ip():
     try:
         s = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
@@ -862,6 +942,14 @@ class Handler(BaseHTTPRequestHandler):
             days = max(20, min(400, days))
             manual = amv_manual.build(days)
             return self._json(manual if manual else amv.compute(days))
+        if path == "/api/kline/check":
+            if remote:
+                return self._json({"ok": False, "error": "只有本机才能检查本地K线"}, 403)
+            try:
+                return self._json(check_kline())
+            except Exception as exc:  # noqa: BLE001
+                log("K线检查失败：%s" % exc)
+                return self._json({"ok": False, "error": "检查失败：%s" % exc}, 500)
         if path == "/api/health":
             with STATE.lock:
                 scan = dict(STATE.scan)

@@ -1066,3 +1066,6 @@ table td.score { color: var(--muted); font-family: var(--mono); font-size: 11px;
 .amv-rule-label { font-size: 14px; color: #7b879c; font-weight: 600; }
 .amv-rule-card .amv-rule-status { font-size: 18px; margin: 0; }
 .amv-rule-card .amv-rule-text { margin-top: 6px; font-size: 13px; line-height: 1.6; }
+
+.kline-check { cursor: pointer; border: 1px solid #dfe9ff; background: #fff; color: #2c56b8; font-size: 13px; }
+.kline-check:disabled { opacity: .6; cursor: wait; }
