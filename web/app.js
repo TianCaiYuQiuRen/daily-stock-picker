@@ -514,8 +514,10 @@
       const nRet = (r.items || []).length - nNew;
       tag.textContent = "已写入";
       tag.className = "tag ok";
-      $("blockDesc").textContent = "已写入 " + written.count + " 只（新选 " + nNew +
-        " + 留存 " + nRet + "）· " + (written.at || "").slice(11, 16);
+      $("blockDesc").textContent = written.only_new
+        ? "已写入 " + written.count + " 只（仅今日新选）· " + (written.at || "").slice(11, 16)
+        : "已写入 " + written.count + " 只（新选 " + nNew +
+          " + 留存 " + nRet + "）· " + (written.at || "").slice(11, 16);
       $("writeHint").textContent = "重启通达信后，在左侧「板块」中即可看到";
     } else if (state.remote) {
       $("blockDesc").textContent = "板块由站长的通达信客户端维护";
@@ -828,15 +830,22 @@
     const wasRunning = !!(state.tdx && state.tdx.running);
     const nNew = (r.items || []).filter((x) => !x.retained).length;
     const nRet = (r.items || []).length - nNew;
+    const onlyNew = $("chkOnlyNew").checked;
+    if (onlyNew && nNew === 0) {
+      toast("今天没有新选股票，无法只写新选");
+      return;
+    }
     if (wasRunning) {
       const tradingNote = (state.freshness && state.freshness.trading)
         ? "当前处于交易时段，关闭通达信会中断行情显示和交易操作；如确认继续，请点「关闭并写入」。\n\n"
         : "";
+      const desc = onlyNew
+        ? "只写入今日新选 " + nNew + " 只（不含留存观察）。"
+        : "写入今天选出的 " + r.items.length + " 只（新选 " + nNew + " + 留存 " + nRet + "）。";
       const yes = await showModal(
         "写入前需要关闭通达信",
         "写入会先清空「" + ((r.strategy && r.strategy.block_name) || "该板块") +
-        "」里的原有股票，再写入今天选出的 " + r.items.length + " 只（新选 " + nNew +
-        " + 留存 " + nRet + "）。\n\n" +
+        "」里的原有股票，" + desc + "\n\n" +
         "通达信正在运行，必须先关闭，否则客户端会用内存里的旧名单覆盖文件。\n\n" +
         tradingNote + "关闭并写入，完成后自动重启通达信？",
         "关闭并写入", true
@@ -849,11 +858,12 @@
     $("btnWriteSide").textContent = "写入中…";
 
     try {
-      const res = await api("/api/write", { method: "POST", body: { restart: wasRunning } });
+      const res = await api("/api/write", { method: "POST", body: { restart: wasRunning, only_new: onlyNew } });
       if (!res.ok) throw new Error(res.error || "写入失败");
-      state.result.written = { name: res.name, count: res.count, at: res.at };
+      state.result.written = { name: res.name, count: res.count, at: res.at, only_new: !!res.only_new };
       renderBlock();
-      toast("已清空原 " + (res.removed || 0) + " 只，写入 " + res.count + " 只");
+      toast("已清空原 " + (res.removed || 0) + " 只，写入 " + res.count + " 只" +
+        (res.only_new ? "（仅今日新选）" : ""));
 
       if (res.tdx_running) {
         showModal("还需要重启通达信",
@@ -1064,6 +1074,11 @@
     $("btnSettings").addEventListener("click", openDrawer);
     $("dataPill").addEventListener("click", showHealth);
     $("btnCheckKline").addEventListener("click", checkKline);
+    const onlyNewBox = $("chkOnlyNew");
+    onlyNewBox.checked = localStorage.getItem("onlyNewWrite") !== "0";
+    onlyNewBox.addEventListener("change", () => {
+      localStorage.setItem("onlyNewWrite", onlyNewBox.checked ? "1" : "0");
+    });
     const amvBtn = $("btnAmvManual");
     if (amvBtn) amvBtn.addEventListener("click", openAmvManual);
     $("btnAmvManualCancel").addEventListener("click", () => { $("amvManualModal").hidden = true; });

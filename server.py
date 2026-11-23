@@ -535,7 +535,7 @@ def _run_scan_async(boards=None, strategy_key=None, auto_write=False):
     return True
 
 
-def _write_block(auto=False, restart=False):
+def _write_block(auto=False, restart=False, only_new=False):
     with STATE.lock:
         result = STATE.result
         if not result or not result.get("items"):
@@ -543,7 +543,12 @@ def _write_block(auto=False, restart=False):
         if STATE.scan["running"]:
             raise ValueError("选股正在进行中，请稍候")
         name = result["strategy"]["block_name"]
-        pairs = [(it["market"], it["code"]) for it in result["items"]]
+        items = result["items"]
+        if only_new:
+            items = [it for it in items if not it.get("retained")]
+            if not items:
+                raise ValueError("今天没有新选股票，无法只写新选")
+        pairs = [(it["market"], it["code"]) for it in items]
         root = config.get()["tdx_root"]
 
     fresh = freshness()
@@ -576,6 +581,7 @@ def _write_block(auto=False, restart=False):
     info["ok"] = True
     info["at"] = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
     info["auto"] = auto
+    info["only_new"] = only_new
     info["tdx_running"] = tdx_block.is_tdx_running()
     info["restarted"] = False
     if restart and was_running:
@@ -588,7 +594,8 @@ def _write_block(auto=False, restart=False):
                        "at": info["at"]}
         if STATE.result is not None:
             STATE.result["written"] = {"name": name, "count": info["count"],
-                                       "at": info["at"], "file": info["file"]}
+                                       "at": info["at"], "file": info["file"],
+                                       "only_new": only_new}
             config.save_last_result(STATE.result)
     return info
 
@@ -815,7 +822,8 @@ class Handler(BaseHTTPRequestHandler):
                 if remote:
                     return self._json({"ok": False, "error": "只有本机才能写入通达信板块"}, 403)
                 try:
-                    info = _write_block(auto=False, restart=bool(data.get("restart")))
+                    info = _write_block(auto=False, restart=bool(data.get("restart")),
+                                        only_new=bool(data.get("only_new")))
                 except ValueError as exc:
                     return self._json({"ok": False, "error": str(exc)}, 400)
                 except tdx_block.BlockError as exc:

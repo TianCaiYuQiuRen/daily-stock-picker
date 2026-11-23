@@ -1069,3 +1069,5 @@ table td.score { color: var(--muted); font-family: var(--mono); font-size: 11px;
 
 .kline-check { cursor: pointer; border: 1px solid #dfe9ff; background: #fff; color: #2c56b8; font-size: 13px; }
 .kline-check:disabled { opacity: .6; cursor: wait; }
+
+.only-new { display: flex; align-items: center; gap: 6px; margin: 8px 0 0; font-size: 12.5px; color: #5b6b85; cursor: pointer; }

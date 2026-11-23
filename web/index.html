@@ -150,6 +150,7 @@
           <div class="block-name" id="blockName">--</div>
           <div class="block-desc" id="blockDesc">选股后自动生成板块名</div>
           <button class="btn dark wide" id="btnWriteSide" disabled>写入板块</button>
+          <label class="only-new"><input type="checkbox" id="chkOnlyNew"> 只写今日新选（不含留存）</label>
           <div class="hint" id="writeHint">每次写入会先清空该板块原有股票，再写入今日名单；写入前需关闭通达信（程序会提示并自动重启）</div>
         </div>
         <div class="card info-card">
@@ -377,6 +378,7 @@
 <script src="/app.js"></script>
 </body>
 </html>
+
 
 
 
