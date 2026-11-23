@@ -16,6 +16,18 @@ def _mean(values, n):
     return sum(values[-n:]) / float(n)
 
 
+def _rolling_mean_series(values, n):
+    """逐根计算 N 日均线，前 N-1 根为 None。"""
+    out = []
+    total = 0.0
+    for i, v in enumerate(values):
+        total += v
+        if i >= n:
+            total -= values[i - n]
+        out.append(total / float(n) if i >= n - 1 else None)
+    return out
+
+
 def _fmt_date(ts):
     return "%04d-%02d-%02d" % (ts // 10000, (ts // 100) % 100, ts % 100)
 
@@ -121,6 +133,16 @@ def build_features(bars, quote, market_date=None, pct_1445=None, use_close=False
     ma28 = _mean(closes_t, 28)
     ma57 = _mean(closes_t, 57)
     ma114 = _mean(closes_t, 114)
+    ma14_s = _rolling_mean_series(closes_t, 14)
+    ma28_s = _rolling_mean_series(closes_t, 28)
+    ma57_s = _rolling_mean_series(closes_t, 57)
+    ma114_s = _rolling_mean_series(closes_t, 114)
+    yellow_series = []
+    for a, b, c, d in zip(ma14_s, ma28_s, ma57_s, ma114_s):
+        if None in (a, b, c, d):
+            yellow_series.append(None)
+        else:
+            yellow_series.append((a + b + c + d) / 4.0)
     yellow = None
     if None not in (ma14, ma28, ma57, ma114):
         yellow = (ma14 + ma28 + ma57 + ma114) / 4.0
@@ -313,6 +335,9 @@ def build_features(bars, quote, market_date=None, pct_1445=None, use_close=False
         "white_above_yellow": white_above_yellow,
         "dist_white": dist_white,
         "dist_yellow": dist_yellow,
+        "hist_closes": closes_t[-120:],
+        "hist_lows": lows_t[-120:],
+        "hist_yellows": yellow_series[-120:],
         "near_line": bool(min(dist_white, dist_yellow) < 5.0),
         # 砖型图
         "brick": brick_now,

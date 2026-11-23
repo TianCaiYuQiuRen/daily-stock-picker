@@ -1379,6 +1379,8 @@
   /* ---------- 战法参数 ---------- */
   const PARAM_LABELS = {
     j_max: "J 值上限", j_min: "J 值下限", pct_abs_max: "涨跌幅绝对值上限 (%)",
+    stop_ticks: "止损下移价位数 (3~5)", max_dist_yellow: "距黄线绝对值上限 (%)",
+    stop_lookback: "止损形态回看天数",
     max_distance: "距白/黄线上限 (%)", body_ratio: "红砖 / 绿砖 比例（0.667 = 2/3）",
     level: "75 位置线", deep: "下探深度", dip_min: "跌破最少天数", dip_max: "跌破最多天数",
     shrink_peak: "缩量 / 前高量 上限", shrink_ma5: "缩量 / 5日均量 上限",

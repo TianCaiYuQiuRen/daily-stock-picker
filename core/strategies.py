@@ -1,4 +1,4 @@
-﻿# -*- coding: utf-8 -*-
+# -*- coding: utf-8 -*-
 """选股战法定义。
 
 三个战法对应三个选项：
@@ -184,17 +184,24 @@ class Shaofu(Strategy):
     name = "少妇战法"
     short = "少妇战法"
     description = ("白线在黄线上；KDJ 的 J 值 ≤ 35 且 > -20；"
-                   "当天 14:45 时涨跌幅的绝对值 < 2.45%。")
+                   "当天 14:45 时涨跌幅的绝对值 < 2.45%；"
+                   "最近出现连续两根收盘在黄线下，以第二根最低价下 3~5 个价位为止损，"
+                   "后续收盘跌破止损则淘汰；当前收盘距黄线绝对值 ≤ 7%。")
     params = {
         "j_max": 35.0,
         "j_min": -20.0,
         "pct_abs_max": 2.45,
+        "stop_ticks": 4,
+        "max_dist_yellow": 7.0,
+        "stop_lookback": 60,
     }
 
     def param_chips(self):
         p = self.params
         return ["白线在黄线上", "KDJ J ∈ (%.0f, %.0f]" % (p["j_min"], p["j_max"]),
-                "14:45 涨跌幅 < %.2f%%" % p["pct_abs_max"]]
+                "14:45 涨跌幅 < %.2f%%" % p["pct_abs_max"],
+                "连续2日收盘<黄线", "距黄线 ≤ %.0f%%" % p["max_dist_yellow"],
+                "跌破止损淘汰"]
 
     def match(self, f):
         p = self.params
@@ -204,9 +211,44 @@ class Shaofu(Strategy):
             return False, 0.0, []
         if abs(f["pct_1445"]) >= p["pct_abs_max"]:
             return False, 0.0, []
+        if abs(f["dist_yellow"]) > p["max_dist_yellow"]:
+            return False, 0.0, []
 
-        tags = ["白上黄", "J=%.2f" % f["kdj_j"], "14:45 平稳"]
-        score = 30.0 - f["kdj_j"] * 0.5 + max(0.0, p["pct_abs_max"] - abs(f["pct_1445"])) * 3.0
+        closes = f.get("hist_closes") or []
+        lows = f.get("hist_lows") or []
+        yellows = f.get("hist_yellows") or []
+        if not closes or len(closes) != len(lows) or len(closes) != len(yellows):
+            return False, 0.0, []
+
+        ticks = min(5.0, max(3.0, float(p["stop_ticks"])))
+        lookback = max(5, int(p["stop_lookback"]))
+        n = len(closes)
+        start = max(1, n - lookback, 114)
+        second = None
+        # 找最近一次“由黄线上方转为黄线下方”的起点，再确认连续第二根也在黄线下
+        for i in range(n - 1, start - 1, -1):
+            y0, y1 = yellows[i - 1], yellows[i]
+            if not y0 or not y1:
+                continue
+            if closes[i] < y1 and closes[i - 1] >= y0:
+                if i + 1 < n and yellows[i + 1] and closes[i + 1] < yellows[i + 1]:
+                    second = i + 1
+                break
+        if second is None:
+            return False, 0.0, []
+
+        stop = float(lows[second]) - ticks * 0.01
+        if stop <= 0:
+            return False, 0.0, []
+        if any(closes[k] < stop for k in range(second + 1, n)):
+            return False, 0.0, []
+
+        f["stop_loss"] = round(stop, 2)
+        f["stop_ticks"] = ticks
+        tags = ["白上黄", "J=%.2f" % f["kdj_j"], "14:45 平稳", "止损 %.2f" % stop]
+        score = (30.0 - f["kdj_j"] * 0.5
+                 + max(0.0, p["pct_abs_max"] - abs(f["pct_1445"])) * 3.0
+                 + max(0.0, p["max_dist_yellow"] - abs(f["dist_yellow"])) * 0.3)
         return True, round(score, 2), tags
 
 
