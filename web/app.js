@@ -510,9 +510,12 @@
 
     const written = (r && r.written && resultMatchesSelection()) ? r.written : null;
     if (written) {
+      const nNew = (r.items || []).filter((x) => !x.retained).length;
+      const nRet = (r.items || []).length - nNew;
       tag.textContent = "已写入";
       tag.className = "tag ok";
-      $("blockDesc").textContent = "已写入 " + written.count + " 只 · " + (written.at || "").slice(11, 16);
+      $("blockDesc").textContent = "已写入 " + written.count + " 只（新选 " + nNew +
+        " + 留存 " + nRet + "）· " + (written.at || "").slice(11, 16);
       $("writeHint").textContent = "重启通达信后，在左侧「板块」中即可看到";
     } else if (state.remote) {
       $("blockDesc").textContent = "板块由站长的通达信客户端维护";
@@ -823,6 +826,8 @@
     } catch (e) { /* 忽略，交给服务端校验 */ }
 
     const wasRunning = !!(state.tdx && state.tdx.running);
+    const nNew = (r.items || []).filter((x) => !x.retained).length;
+    const nRet = (r.items || []).length - nNew;
     if (wasRunning) {
       const tradingNote = (state.freshness && state.freshness.trading)
         ? "当前处于交易时段，关闭通达信会中断行情显示和交易操作；如确认继续，请点「关闭并写入」。\n\n"
@@ -830,7 +835,8 @@
       const yes = await showModal(
         "写入前需要关闭通达信",
         "写入会先清空「" + ((r.strategy && r.strategy.block_name) || "该板块") +
-        "」里的原有股票，再写入今天选出的 " + r.items.length + " 只。\n\n" +
+        "」里的原有股票，再写入今天选出的 " + r.items.length + " 只（新选 " + nNew +
+        " + 留存 " + nRet + "）。\n\n" +
         "通达信正在运行，必须先关闭，否则客户端会用内存里的旧名单覆盖文件。\n\n" +
         tradingNote + "关闭并写入，完成后自动重启通达信？",
         "关闭并写入", true
