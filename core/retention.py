@@ -1,5 +1,8 @@
 # -*- coding: utf-8 -*-
-"""少妇战法留存观察：不再命中后保留 N 个交易日，到期自动清除。"""
+"""少妇战法留存观察（当前已关闭）。
+
+之后少妇战法只保留当天命中的股票；旧的留存数据会在下次选股时清空。
+"""
 import json
 import os
 from datetime import date, datetime, timedelta
@@ -8,6 +11,8 @@ from core import config
 
 RETAIN_DAYS = 10
 STRATEGY_KEY = "shaofu"
+# 少妇战法已关闭留存：只保留当天通过条件的股票
+RETAIN_ENABLED = False
 FIELDS = (
     "code", "market", "name", "price", "pct", "vol_ratio", "turnover",
     "amount", "float_cap", "score", "tags", "white", "yellow", "brick",
@@ -103,6 +108,13 @@ def _refresh_quote(payload, quote):
 def merge(strategy_key, items, market_date, quote_map=None, store=None, path=None):
     """合并今日命中项和留存观察项，返回 (全部展示项, 留存数量)。"""
     if strategy_key != STRATEGY_KEY:
+        return items, 0
+    if not RETAIN_ENABLED:
+        data = _load(path)
+        bucket = (data.get("strategies") or {}).get(STRATEGY_KEY)
+        if bucket:
+            data["strategies"].pop(STRATEGY_KEY, None)
+            _save(data, path)
         return items, 0
 
     quote_map = quote_map or {}
